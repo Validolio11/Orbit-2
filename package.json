@@ -1,7 +1,7 @@
 {
   "name": "orbit2-desktop",
   "productName": "Orbit 2",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Orbit 2 — a mouse-first radial launcher for Windows",
   "main": "src/main.cjs",

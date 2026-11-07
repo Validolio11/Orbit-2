@@ -43,8 +43,8 @@ export function renderWheel(container,items,options={}){
     ${items.map((item,i)=>{
       const a=(-90+i*360/count)*Math.PI/180,r=150;
       const labelWidth=wheelLabelWidth(a,count);
-      return `<button class="wheel-item ${options.selected===item.id?'selected':''}" data-wheel-id="${escapeHTML(item.id)}" data-index="${i}" style="left:${50+r*Math.cos(a)/4.8}%;top:${50+r*Math.sin(a)/4.8}%;--wheel-label-width:${(labelWidth/4.8).toFixed(3)}cqw;--i:${i}" title="${escapeHTML(item.name)}" aria-label="${escapeHTML(item.name)}${item.kind==='group'?', група':''}">
-       ${itemIcon(item,25)}<span class="wheel-item-label">${escapeHTML(item.name)}</span>${item.kind==='group'?'<i class="group-indicator">···</i>':''}${i<9?`<i class="wheel-num" aria-hidden="true">${i+1}</i>`:''}
+      return `<button class="wheel-item ${options.selected===item.id?'selected':''}" data-wheel-id="${escapeHTML(item.id)}" data-index="${i}" style="left:${50+r*Math.cos(a)/4.8}%;top:${50+r*Math.sin(a)/4.8}%;--wheel-label-width:${(labelWidth/4.8).toFixed(3)}cqw;--i:${i}" title="${escapeHTML(item.name)}" aria-label="${escapeHTML(item.name)}${item.kind==='group'?(item.target==='sequence'?', послідовність':', група'):''}">
+       ${itemIcon(item,25)}<span class="wheel-item-label">${escapeHTML(item.name)}</span>${item.kind==='group'?(item.target==='sequence'?'<i class="group-indicator sequence">▸▸</i>':'<i class="group-indicator">···</i>'):''}${i<9?`<i class="wheel-num" aria-hidden="true">${i+1}</i>`:''}
       </button>`;
     }).join('')}
     <button class="wheel-center" aria-label="${options.back?'Назад':escapeHTML(title)+', '+items.length+' дій'}" ${options.back?'data-wheel-back':''} data-default-title="${escapeHTML(title)}" data-default-sub="${escapeHTML(subtitle)}">
@@ -61,7 +61,7 @@ export function setWheelCenter(container,item){
   const title=center.querySelector('[data-center-title]'),sub=center.querySelector('[data-center-sub]');
   center.classList.toggle('previewing',!!item);
   title.textContent=item?item.name:center.dataset.defaultTitle;
-  sub.textContent=item?(item.kind==='add'?'Додати дію':KIND_VERBS[item.kind]||''):center.dataset.defaultSub;
+  sub.textContent=item?(item.kind==='add'?'Додати дію':item.kind==='group'&&item.target==='sequence'?'Виконати всі по черзі':KIND_VERBS[item.kind]||''):center.dataset.defaultSub;
 }
 
 // Fills the arc around a sector over `ms` milliseconds; index -1 clears it.

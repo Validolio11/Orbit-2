@@ -127,3 +127,17 @@ test('the hover arc follows its sector and covers the whole ring for a single ac
   assert.match(sectorArc(0, 4), /^M[\d.]+,[\d.]+ A216,216 0 0 1 /);
   assert.equal((sectorArc(0, 1).match(/A216/g) || []).length, 2);
 });
+
+test('groups are either nested wheels or sequences, and menu shortcuts are distinct Ctrl+Alt digits', () => {
+  const group = target => ({ ...action('g', 'group', target), children: [action('c1'), action('c2', 'keys', 'Ctrl+C')] });
+  assert.equal(validateAction(group('sequence')).target, 'sequence');
+  assert.equal(validateAction(group('anything else')).target, '');
+  const config = legacyConfig();
+  config.menus[0].hotkey = 'Control+Alt+1';
+  config.menus.push({ id: 'two', name: 'Друге', icon: 'orbit', hotkey: 'Control+Alt+2', items: [] });
+  const state = validateState(config);
+  assert.deepEqual(state.menus.map(menu => menu.hotkey), ['Control+Alt+1', 'Control+Alt+2']);
+  assert.equal(validateState({ ...config, menus: config.menus.map(menu => ({ ...menu, hotkey: '' })) }).menus[0].hotkey, undefined);
+  for (const hotkeys of [['Control+Alt+1', 'Control+Alt+1'], ['Control+Alt+0', ''], ['Control+Space', '']])
+    assert.throws(() => validateState({ ...config, menus: config.menus.map((menu, index) => ({ ...menu, hotkey: hotkeys[index] })) }), /Menu shortcuts/);
+});

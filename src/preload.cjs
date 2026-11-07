@@ -33,6 +33,8 @@ contextBridge.exposeInMainWorld('orbit', Object.freeze({
   createBackup: () => ipcRenderer.invoke('orbit:create-backup'),
   restoreBackup: name => ipcRenderer.invoke('orbit:restore-backup', name),
   quitLegacy: () => ipcRenderer.invoke('orbit:quit-legacy'),
+  exportMenu: menuId => ipcRenderer.invoke('orbit:export-menu', menuId),
+  importMenu: () => ipcRenderer.invoke('orbit:import-menu'),
   pickProgram: () => ipcRenderer.invoke('orbit:pick-program'),
   onUsageChanged: callback => subscribe('orbit:usage-changed', callback),
   onWheelMenu: callback => subscribe('orbit:wheel-menu', callback),

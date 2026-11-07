@@ -22,7 +22,7 @@ const FIRST_RUN_APPS = ['Google Chrome', 'Microsoft Edge', 'Firefox', 'Telegram'
   'Microsoft Word', 'Microsoft Excel', 'Zoom', 'Steam', 'Blender', 'OBS Studio'];
 let firstRun = false, stateRecoveryFile = null, stateRecoveredFromBackup = false, redirectedAppData = null, migratedFromLegacy = false;
 // The menu the open wheel shows: the active one, or the menu linked to the program in front.
-let wheelMenuId = null, registeredHotkey = '';
+let wheelMenuId = null, wheelMenuForced = false, registeredHotkey = '', registeredMenuHotkeys = [], usageSnapshot = null, trayTimer = null;
 // The program that was in front when the wheel opened; the wheel's "+" adds it.
 let wheelForeground = null;
 const NATIVE = app.isPackaged && __dirname.includes('app.asar')
@@ -298,7 +298,8 @@ async function persistState(value) {
   if (next.autoBackup !== false && state) await backups.daily(JSON.stringify(state, null, 2)).catch(error => console.warn('Orbit 2: daily backup failed.', error.message));
   await writeDurable(statePath, JSON.stringify(next, null, 2));
   const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled;
-  const hotkeyChanged = state.hotkey !== next.hotkey;
+  const menuKeys = value => value.menus.map(menu => `${menu.id}=${menu.hotkey || ''}`).join();
+  const hotkeyChanged = state.hotkey !== next.hotkey || menuKeys(state) !== menuKeys(next);
   state = next;
   if (hotkeyChanged) registerHotkey();
   nativeTheme.themeSource = state.theme;
@@ -489,12 +490,14 @@ async function seedFirstRunApps() {
   if (JSON.stringify(state) === snapshot) await saveState(next).catch(() => {});
 }
 
-async function showWheel(physicalPoint, trigger = 'preview', foregroundPath = '') {
+async function showWheel(physicalPoint, trigger = 'preview', foregroundPath = '', forcedMenuId = null) {
   if (!overlayWindow || overlayWindow.isDestroyed()) return { ok: false, error: 'Wheel unavailable.' };
   const session = ++wheelSession;
   wheelForeground = null;
-  const context = trigger === 'preview' ? null : menuForProgram(state, foregroundPath);
-  wheelMenuId = context?.id || state.activeMenuId;
+  const forced = forcedMenuId && state.menus.some(menu => menu.id === forcedMenuId) ? forcedMenuId : null;
+  const context = trigger === 'preview' || forced ? null : menuForProgram(state, foregroundPath);
+  wheelMenuId = forced || context?.id || state.activeMenuId;
+  wheelMenuForced = !!forced;
   if (trigger !== 'preview' && state.introPending) patchState({ introPending: false }).catch(() => {});
   pendingMouseOpen = trigger === 'mouse';
   pendingMouseRelease = null;
@@ -554,7 +557,7 @@ function startHook() {
       }
       else if (event.type === 'foreground' && wheelVisible) {
         // The keyboard-opened wheel learns the program in front only now; switch to its linked menu.
-        const context = menuForProgram(state, event.path);
+        const context = wheelMenuForced ? null : menuForProgram(state, event.path);
         if (context && context.id !== wheelMenuId) { wheelMenuId = context.id; overlayWindow.webContents.send('orbit:wheel-menu', { menuId: context.id, context: true }); }
         resolveForeground(event.path, wheelSession).catch(() => {});
       }
@@ -614,14 +617,26 @@ function runNative(argument) {
   });
 }
 
-async function executeAction(input) {
+async function executeAction(input, nested = false) {
   let action, executing = false;
   try {
     action = validateAction(input);
-    if (action.kind === 'group') return { ok: false, error: 'Відкрийте групу в колесі.' };
+    if (action.kind === 'group' && action.target !== 'sequence') return { ok: false, error: 'Відкрийте групу в колесі.' };
     closeWheel();
     if (ISOLATED) return { ok: false, error: 'Actions are disabled during isolated tests.' };
     executing = true;
+    // A sequence runs its actions one after another; nested plain groups are skipped.
+    if (action.kind === 'group') {
+      const steps = action.children.filter(child => child.kind !== 'group' || child.target === 'sequence');
+      if (!steps.length) throw new Error('Додайте дії в послідовність.');
+      for (const [index, step] of steps.entries()) {
+        if (index) await new Promise(resolve => setTimeout(resolve, 350));
+        const result = await executeAction(step, true);
+        if (!result.ok) return result;
+      }
+      if (!nested) usage?.record(action.id).catch(() => {});
+      return { ok: true };
+    }
     if (!action.target.trim()) throw new Error('Спочатку виберіть шлях до застосунку або файлу в налаштуваннях дії.');
     if (action.kind === 'system') {
       const windows = process.env.WINDIR || 'C:\\Windows';
@@ -668,7 +683,7 @@ async function executeAction(input) {
         const error = await shell.openPath(action.target); if (error) throw new Error(error);
       } else throw new Error('Для застосунку виберіть файл .exe або .lnk.');
     }
-    usage?.record(action.id).catch(() => {});
+    if (!nested) usage?.record(action.id).catch(() => {});
     return { ok: true };
   } catch (error) {
     if (executing) {
@@ -689,11 +704,11 @@ async function pasteText(text) {
   if (previous !== null) setTimeout(() => { if (clipboard.readText() === text) clipboard.writeText(previous); }, 900);
 }
 
-function onHotkey() {
+function onHotkey(menuId = null) {
   if (wheelVisible) { closeWheel(); return; }
   // Ask the hook which program is in front before the keyboard-opened wheel takes focus.
   try { hookProcess?.stdin.write('foreground\n'); } catch { }
-  showWheel(undefined, 'keyboard').catch(console.error);
+  showWheel(undefined, 'keyboard', '', menuId).catch(console.error);
 }
 
 function registerHotkey() {
@@ -703,7 +718,16 @@ function registerHotkey() {
   let registered = false;
   if (wanted) { try { registered = globalShortcut.register(wanted, onHotkey); } catch { registered = false; } }
   if (registered) registeredHotkey = wanted;
-  updateRuntime({ shortcutRegistered: registered, hotkey: wanted });
+  for (const key of registeredMenuHotkeys) globalShortcut.unregister(key);
+  registeredMenuHotkeys = [];
+  const failed = [];
+  for (const menu of state.menus) {
+    if (!menu.hotkey) continue;
+    let ok = false;
+    try { ok = globalShortcut.register(menu.hotkey, () => onHotkey(menu.id)); } catch { ok = false; }
+    if (ok) registeredMenuHotkeys.push(menu.hotkey); else failed.push(menu.hotkey);
+  }
+  updateRuntime({ shortcutRegistered: registered, hotkey: wanted, menuHotkeysFailed: failed });
 }
 
 async function refreshLegacy() {
@@ -764,6 +788,33 @@ function registerIPC() {
     return saveState(JSON.parse(text));
   });
   handle('orbit:quit-legacy', quitLegacy);
+  handle('orbit:export-menu', async menuId => {
+    const menu = state.menus.find(item => item.id === menuId);
+    if (!menu) throw new Error('Меню не знайдено.');
+    const result = await dialog.showSaveDialog(mainWindow, { title: 'Поділитися меню', defaultPath: `${menu.name.replace(/[<>:"/\\|?*]+/g, '_')}.orbit-menu.json`, filters: [{ name: 'Меню Orbit 2', extensions: ['json'] }] });
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true };
+    const { hotkey, ...shared } = menu;
+    await fsp.writeFile(result.filePath, JSON.stringify({ orbitMenu: 1, menu: shared }, null, 2), 'utf8');
+    return { ok: true };
+  });
+  handle('orbit:import-menu', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, { title: 'Імпортувати меню', properties: ['openFile'], filters: [{ name: 'Меню Orbit 2', extensions: ['json'] }] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    if ((await fsp.stat(result.filePaths[0])).size > 1024 * 1024) throw new Error('Файл меню завеликий.');
+    let data;
+    try { data = JSON.parse(await fsp.readFile(result.filePaths[0], 'utf8')); } catch { throw new Error('Файл меню пошкоджений.'); }
+    const source = data && data.orbitMenu === 1 && data.menu && typeof data.menu === 'object' ? data.menu : null;
+    if (!source) throw new Error('Це не файл меню Orbit 2.');
+    if (state.menus.length >= 20) throw new Error('Можна створити до 20 меню.');
+    // Fresh IDs keep an imported menu from clashing with existing actions; validation still checks every action.
+    const renew = items => (Array.isArray(items) ? items : []).map(item => ({ ...(item && typeof item === 'object' ? item : {}), id: randomUUID(), children: renew(item?.children) }));
+    let name = String(source.name || 'Меню').slice(0, 88);
+    if (state.menus.some(menu => menu.name === name)) name += ' (імпорт)';
+    const taken = new Set(state.menus.flatMap(menu => menu.apps || []));
+    const menu = { id: randomUUID(), name, icon: 'orbit', apps: (Array.isArray(source.apps) ? source.apps : []).filter(appName => !taken.has(appName)), items: renew(source.items) };
+    const next = await saveState(current => ({ ...current, menus: [...current.menus, menu], activeMenuId: menu.id }));
+    return { state: next, name };
+  });
   handle('orbit:pick-program', async () => {
     const result = await dialog.showOpenDialog(mainWindow, { title: 'Виберіть програму', properties: ['openFile'], filters: [{ name: 'Програми Windows', extensions: ['exe', 'lnk'] }] });
     if (result.canceled || !result.filePaths[0]) return null;
@@ -818,6 +869,18 @@ function showMain(page) {
   if (page) mainWindow.webContents.send('orbit:navigate', page);
 }
 
+// The most launched actions, runnable straight from the tray.
+function frequentTrayItems() {
+  const counts = usageSnapshot?.actions || {}, actions = [];
+  const walk = items => items.forEach(item => {
+    if (item.kind !== 'group' || item.target === 'sequence') actions.push(item);
+    else walk(item.children);
+  });
+  state.menus.forEach(menu => walk(menu.items));
+  const frequent = actions.filter(item => counts[item.id]?.count).sort((a, b) => counts[b.id].count - counts[a.id].count).slice(0, 8);
+  return frequent.length ? [{ label: 'Часті дії', submenu: frequent.map(item => ({ label: item.name.replace(/&/g, '&&'), click: () => executeAction(item).catch(console.error) })) }] : [];
+}
+
 function updateTray() {
   if (!tray) return;
   tray.setToolTip(`Orbit 2 · ${state.enabled ? 'Увімкнено' : 'Призупинено'}`);
@@ -826,6 +889,7 @@ function updateTray() {
     { label: 'Огляд і статистика', click: () => showMain('overview') },
     { label: 'Показати колесо', click: () => showWheel().catch(console.error) },
     { label: 'Додати дію…', click: () => showMain({ page: 'menus', groupPath: [], add: true }) },
+    ...frequentTrayItems(),
     ...(state.menus.length > 1 ? [{ label: 'Меню на колесі', submenu: state.menus.map(menu => ({ label: menu.name, type: 'radio', checked: menu.id === state.activeMenuId,
       click: () => patchState({ activeMenuId: menu.id }).catch(error => { console.error(error); updateTray(); }) })) }] : []),
     { label: 'Увімкнено', type: 'checkbox', checked: state.enabled, click: item => patchState({ enabled: item.checked }).catch(error => { console.error(error); updateTray(); }) },
@@ -884,7 +948,11 @@ else {
     if (app.isPackaged && !ISOLATED && await leaveRedirectedAppData()) return;
     statePath = path.join(app.getPath('userData'), 'settings.json');
     backups = createBackups({ dir: path.join(app.getPath('userData'), 'backups') });
-    usage = createUsage({ file: path.join(app.getPath('userData'), 'usage.json'), onChange: value => sendAll('orbit:usage-changed', value) });
+    usage = createUsage({ file: path.join(app.getPath('userData'), 'usage.json'), onChange: value => {
+      usageSnapshot = value; sendAll('orbit:usage-changed', value);
+      clearTimeout(trayTimer); trayTimer = setTimeout(updateTray, 500);
+    } });
+    usage.get().then(value => { usageSnapshot = value; updateTray(); }).catch(() => {});
     state = await loadState(); nativeTheme.themeSource = state.theme;
     if (migratedFromLegacy) { runtime.migratedFromLegacy = true; await saveState(state).catch(error => console.warn('Orbit 2: imported menus not saved.', error.message)); }
     applyLoginItem(); updateUninstallEntry();
@@ -911,7 +979,7 @@ else {
     if (app.isPackaged && !ISOLATED) updater.reportFailedInstall().catch(error => console.warn('Orbit 2: could not read the last update result.', error));
     if (SMOKE) { await smokeTest(); app.quit(); return; }
     appCatalog.warm();
-    if (E2E) { globalThis.__orbitE2E = { resolveForeground: exePath => resolveForeground(exePath, wheelSession), showWheel: (point, foreground = '') => showWheel(point, 'mouse', foreground), recordUsage: id => usage.record(id) }; return; }
+    if (E2E) { globalThis.__orbitE2E = { resolveForeground: exePath => resolveForeground(exePath, wheelSession), showWheel: (point, foreground = '', menuId = null) => showWheel(point, 'mouse', foreground, menuId), recordUsage: id => usage.record(id) }; return; }
     createTray();
     if (firstRun) seedFirstRunApps().catch(() => {});
     registerHotkey();

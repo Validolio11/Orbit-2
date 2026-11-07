@@ -189,3 +189,16 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .palette-foot kbd{font-size:9.5px;padding:0 4px;margin-right:2px}
 
 @media(max-width:1180px){.stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-grid{grid-template-columns:minmax(0,1fr)}.titlebar-search span{display:none}.titlebar-search{width:auto}}
+
+/* Iteration 2: undo toast, sequences, menu shortcuts */
+#toast.has-action{pointer-events:auto;display:flex;align-items:center;gap:14px;padding:8px 8px 8px 16px}
+.toast-action{border:1px solid color-mix(in srgb,var(--bg) 30%,transparent);background:color-mix(in srgb,var(--bg) 10%,transparent);color:inherit;font-weight:600;font-size:12px;border-radius:6px;padding:4px 10px}
+.toast-action:hover{background:color-mix(in srgb,var(--bg) 22%,transparent)}
+.check-row{display:flex;gap:11px;align-items:flex-start;margin-top:16px;padding:12px 13px;border:1px solid var(--line);border-radius:9px;background:var(--panel);cursor:pointer}
+.check-row:has(input:checked){border-color:var(--accent-line);background:var(--accent-soft)}
+.check-row input{margin-top:2px;accent-color:var(--accent);width:15px;height:15px;flex:none}
+.check-row strong{display:block;font-size:12px;font-weight:500}
+.check-row small{display:block;font-size:10.5px;color:var(--muted);line-height:1.6;margin-top:2px}
+.wheel-item .group-indicator.sequence{letter-spacing:0;color:var(--accent);font-size:10px}
+.tab-key{font-size:9px;padding:0 4px;color:var(--muted);border-radius:4px}
+.menu-tab.active .tab-key{color:var(--accent);border-color:var(--accent-line)}

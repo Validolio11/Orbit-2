@@ -136,6 +136,72 @@ const fs=require('node:fs/promises');
     await shot('library');
     console.log('PASS: Overview statistics, library type filter and popularity sort');
 
+    // Duplicate an action, delete the copy and bring it back from the toast.
+    await page.locator('[data-page="menus"]').click();
+    await page.getByRole('tab',{name:/Головне меню/}).click();
+    const mainMenu=async()=>(await state()).menus.find(menu=>menu.id==='main');
+    const original=(await mainMenu()).items.find(item=>item.kind!=='group');
+    const countBefore=(await mainMenu()).items.length;
+    await page.locator(`[data-duplicate-id="${original.id}"]`).click();
+    await page.waitForFunction(count=>window.orbit.getState().then(value=>value.menus.find(menu=>menu.id==='main').items.length===count),countBefore+1);
+    const copy=(await mainMenu()).items.find(item=>item.name===original.name+' — копія');
+    assert.ok(copy&&copy.id!==original.id);
+    await page.locator(`[data-delete-action="${copy.id}"]`).click();await dialog().locator('#confirm-delete').click();await waitSave();
+    await page.locator('#toast .toast-action').click();
+    await page.waitForFunction(id=>window.orbit.getState().then(value=>value.menus.find(menu=>menu.id==='main').items.some(item=>item.id===id)),copy.id);
+    console.log('PASS: duplicate action, delete and undo from the toast');
+
+    // A sequence group runs instead of opening on the wheel.
+    await page.locator('.panel-head [data-command="add-action"]').click();
+    await dialog().locator('[data-kind="group"]').click();
+    await dialog().locator('#action-name').fill('Ранок');
+    await dialog().locator('input[name="sequence"]').check();
+    await dialog().getByRole('button',{name:'Створити групу',exact:true}).click();await waitSave();
+    await page.locator('[data-command="group-back"]').waitFor();
+    await page.locator('.panel-head [data-command="add-action"]').click();
+    await dialog().locator('[data-kind="text"]').click();
+    await dialog().locator('#action-target').fill('Доброго ранку!');
+    await dialog().getByRole('button',{name:'Додати дію',exact:true}).click();await waitSave();
+    await page.locator('[data-command="group-back"]').click();
+    const sequence=(await mainMenu()).items.find(item=>item.name==='Ранок');
+    assert.deepEqual([sequence.target,sequence.children.length],['sequence',1]);
+    await page.locator('.action-desc').filter({hasText:'Послідовність · 1 дію по черзі'}).waitFor();
+    await page.locator('[data-command="preview"]').first().click();
+    await overlay.locator(`[data-wheel-id="${sequence.id}"] .group-indicator.sequence`).waitFor();
+    await overlay.locator(`[data-wheel-id="${sequence.id}"]`).click();
+    // Running is disabled in isolated tests, but the wheel must not open the sequence as a group.
+    await overlay.waitForFunction(()=>!document.querySelector('[data-wheel-back]'));
+    assert.equal(await overlay.locator(`[data-wheel-id="${sequence.children[0].id}"]`).count(),0);
+    await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('overlay=1')).hide());
+    console.log('PASS: sequence group is marked on the wheel and runs instead of opening');
+
+    // Menu shortcut, then share the menu to a file and import it as a new menu.
+    await page.locator('[data-command="rename-menu"]').click();
+    await dialog().locator('#menu-hotkey').selectOption('Control+Alt+3');
+    await dialog().getByRole('button',{name:'Зберегти',exact:true}).click();await waitSave();
+    assert.equal((await mainMenu()).hotkey,'Control+Alt+3');
+    await page.locator('.menu-tab.active .tab-key').filter({hasText:'Ctrl Alt 3'}).waitFor();
+    const menuFile=await app.evaluate(({app,dialog})=>{
+      const file=app.getPath('userData')+'/shared.orbit-menu.json';
+      dialog.showSaveDialog=async()=>({canceled:false,filePath:file});
+      dialog.showOpenDialog=async()=>({canceled:false,filePaths:[file]});
+      return file;
+    });
+    await page.locator('[data-export-menu]').click();
+    await page.getByRole('status').filter({hasText:'Меню збережено у файл'}).waitFor();
+    const sharedFile=JSON.parse(await fs.readFile(menuFile,'utf8'));
+    assert.equal(sharedFile.orbitMenu,1);assert.equal(sharedFile.menu.hotkey,undefined);
+    await page.locator('[data-import-menu]').click();
+    await page.locator('.menu-tab').filter({hasText:'Головне меню (імпорт)'}).waitFor();
+    saved=await state();
+    const imported=saved.menus.find(menu=>menu.name==='Головне меню (імпорт)');
+    assert.equal(imported.items.length,(await mainMenu()).items.length);
+    assert.equal(imported.hotkey,undefined);
+    const allIds=[];const walkIds=items=>items.forEach(item=>{allIds.push(item.id);walkIds(item.children);});saved.menus.forEach(menu=>walkIds(menu.items));
+    assert.equal(allIds.length,new Set(allIds).size);
+    await shot('menus-iteration2');
+    console.log('PASS: menu shortcut, menu export and import with fresh IDs');
+
     await page.locator('[data-page="settings"]').click();
     await page.locator('[data-theme-value="light"]').click();
     await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');

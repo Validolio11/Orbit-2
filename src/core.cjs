@@ -4,6 +4,8 @@ const SYSTEM_ACTIONS = new Set(['explorer', 'task-manager', 'screenshot', 'mute'
 const ACTION_KINDS = new Set(['app', 'folder', 'script', 'system', 'keys', 'text', 'group']);
 const ACCENTS = ['blue', 'violet', 'green', 'amber', 'rose', 'mono'];
 // Global shortcuts that open the wheel; '' turns the keyboard shortcut off.
+// Each menu can have its own shortcut that opens the wheel straight on that menu.
+const MENU_HOTKEYS = Array.from({ length: 9 }, (_, index) => `Control+Alt+${index + 1}`);
 const HOTKEYS = ['Control+Space', 'Control+Shift+Space', 'Control+Alt+Space', 'Alt+Shift+Space', 'Control+`', ''];
 const { validatePackagedTarget } = require('./app-catalog.cjs');
 const { parseShortcut } = require('./shortcuts.cjs');
@@ -34,6 +36,8 @@ function validateAction(value, depth = 0, ids = new Set()) {
     result.args = '';
   }
   if (value.kind === 'group') {
+    // A group either opens a nested wheel or, as a sequence, runs all of its actions in order.
+    result.target = result.target === 'sequence' ? 'sequence' : '';
     if (!Array.isArray(value.children) || value.children.length > 12) throw new Error('A group can contain up to 12 actions.');
     result.children = value.children.map(child => validateAction(child, depth + 1, ids));
   }
@@ -59,7 +63,7 @@ function validateState(value) {
   if (value.introPending !== undefined && typeof value.introPending !== 'boolean') throw new Error('Invalid introduction preference.');
   if (value.wheelSize !== undefined && (!Number.isInteger(value.wheelSize) || value.wheelSize < 312 || value.wheelSize > 780)) throw new Error('Wheel size must be an integer between 312 and 780 DIP.');
   if (!Array.isArray(value.menus) || !value.menus.length || value.menus.length > 20) throw new Error('Create between 1 and 20 menus.');
-  const ids = new Set();
+  const ids = new Set(), menuHotkeys = new Set();
   const menus = value.menus.map(menu => {
     if (!menu || typeof menu !== 'object') throw new Error('Invalid menu.');
     const id = string(menu.id, 'menu ID', 100);
@@ -69,7 +73,10 @@ function validateState(value) {
     const name = string(menu.name, 'menu name', 100).trim();
     if (!name) throw new Error('A menu needs a name.');
     const apps = validateMenuApps(menu.apps);
-    return { id, name, icon: string(menu.icon ?? 'orbit', 'menu icon', 100), ...(apps.length ? { apps } : {}), items: menu.items.map(item => validateAction(item, 0, ids)) };
+    const hotkey = menu.hotkey ?? '';
+    if (hotkey && (!MENU_HOTKEYS.includes(hotkey) || menuHotkeys.has(hotkey))) throw new Error('Menu shortcuts must be distinct Ctrl+Alt+1…9 keys.');
+    if (hotkey) menuHotkeys.add(hotkey);
+    return { id, name, icon: string(menu.icon ?? 'orbit', 'menu icon', 100), ...(apps.length ? { apps } : {}), ...(hotkey ? { hotkey } : {}), items: menu.items.map(item => validateAction(item, 0, ids)) };
   });
   if (!menus.some(menu => menu.id === value.activeMenuId)) throw new Error('The active menu does not exist.');
   return { version: 2, accent: value.accent ?? 'blue', hotkey: value.hotkey ?? 'Control+Space', wheelLabels: value.wheelLabels ?? true,
@@ -171,4 +178,4 @@ function foregroundCandidate(exePath, ownExe) {
   return !SHELL_PROCESSES.has(exePath.split('\\').pop().toLowerCase());
 }
 
-module.exports = { ACCENTS, HOTKEYS, programName, menuForProgram, foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, pointIsOutsideWheel, shouldCloseWheelOnClick };
+module.exports = { ACCENTS, HOTKEYS, MENU_HOTKEYS, programName, menuForProgram, foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, pointIsOutsideWheel, shouldCloseWheelOnClick };
