@@ -6,7 +6,7 @@ const path=require('node:path');
 (async()=>{
   const project=path.resolve(__dirname,'..');
   const packaged=process.argv.includes('--packaged');
-  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit-win32-x64','Orbit.exe'):require('electron'),cwd:project});
+  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit2-win32-x64','Orbit2.exe'):require('electron'),cwd:project});
   try{
     await app.firstWindow();let page;
     for(let n=0;n<100;n++){page=app.windows().find(p=>p.url().endsWith('/index.html'));if(page)break;await new Promise(r=>setTimeout(r,50));}
@@ -59,7 +59,7 @@ const path=require('node:path');
     assert.equal(await section.locator('[data-update-version]').textContent(),'Встановлено 7.4.2','Installed version must come from the native updater');
     assert.equal(await page.locator('.title-brand .version').textContent(),'7.4.2');
     await section.locator('[data-command="open-update-repository"]').click();
-    assert.deepEqual(await app.evaluate(()=>globalThis.__orbitUpdatesQA.external),['https://github.com/Validolio11/Orbit']);
+    assert.deepEqual(await app.evaluate(()=>globalThis.__orbitUpdatesQA.external),['https://github.com/Validolio11/Orbit-2']);
 
     await check().click();await waitMessage('Перевіряємо нові версії…');
     assert.equal(await check().isDisabled(),true,'Checking must disable repeated requests');

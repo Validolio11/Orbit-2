@@ -116,10 +116,26 @@ const paths = {
   coffee:'<path d="M4 9h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3v3m4-3v3"/>',
   gift:'<rect x="3" y="8" width="18" height="4" rx="1"/><path d="M5 12v9h14v-9M12 8v13M12 8C11 5 7 3 6 5.5S9 8 12 8zm0 0c1-3 5-5 6-2.5S15 8 12 8z"/>',
   tag:'<path d="M3 12V3h9l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+  keys:'<rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/>',
+  text:'<path d="M4 6h16M4 11h16M4 16h10"/><path d="m17 16 2 2 3-4"/>',
+  undo:'<path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+  redo:'<path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/>',
+  select:'<path d="M4 8V5a1 1 0 0 1 1-1h3m8 0h3a1 1 0 0 1 1 1v3m0 8v3a1 1 0 0 1-1 1h-3m-8 0H5a1 1 0 0 1-1-1v-3"/><rect x="8" y="8" width="8" height="8" rx="1"/>',
+  save:'<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/>',
+  windowClose:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M10 12l4 4m0-4-4 4"/>',
+  windowMin:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18M8 15h8"/>',
+  windowMax:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/><rect x="8" y="11" width="8" height="5" rx="1"/>',
+  desktopNext:'<rect x="2" y="5" width="13" height="10" rx="1.5"/><path d="M6 19h5M18 8l3 3-3 3M15 11h6"/>',
+  desktopPrev:'<rect x="9" y="5" width="13" height="10" rx="1.5"/><path d="M13 19h5M6 8l-3 3 3 3M9 11H3"/>',
+  command:'<path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/>',
+  history:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 3"/>',
+  link:'<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  launch:'<path d="M5 19 19 5M9 5h10v10"/>',
+  overview:'<rect x="3" y="3" width="8" height="10" rx="1.5"/><rect x="13" y="3" width="8" height="6" rx="1.5"/><rect x="13" y="11" width="8" height="10" rx="1.5"/><rect x="3" y="15" width="8" height="6" rx="1.5"/>',
 };
 export const systemIcons={explorer:'folder','task-manager':'tasks',screenshot:'screenshot',mute:'volumeMute','volume-up':'volumeUp','volume-down':'volumeDown',desktop:'desktop',settings:'settings',lock:'lock','media-play':'playPause',
   'control-panel':'sliders','recycle-bin':'trash',search:'search',run:'run','task-view':'windows',clipboard:'clipboard',emoji:'emoji',dictation:'mic',notifications:'bell',
-  'sound-settings':'volume',bluetooth:'bluetooth','media-prev':'trackPrev','media-next':'trackNext',calculator:'calculator',notepad:'notepad'};
+  'sound-settings':'volume',bluetooth:'bluetooth','media-prev':'trackPrev','media-next':'trackNext',calculator:'calculator',notepad:'notepad','close-window':'windowClose','minimize-window':'windowMin','maximize-window':'windowMax','desktop-next':'desktopNext','desktop-prev':'desktopPrev'};
 export function icon(name,size=20){return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]||paths.app}</svg>`;}
 function fallbackItemIcon(item,size=22){
   const n = (item.name||'').toLowerCase();

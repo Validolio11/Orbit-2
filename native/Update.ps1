@@ -37,7 +37,7 @@ if ($Detach) {
     [Console]::Out.Write($installer.Id)
     exit 0
 }
-$productId = 'com.creationsoft.orbit'
+$productId = 'com.creationsoft.orbit2'
 $createdStage = $false
 $oldMoved = $false
 $newMoved = $false
@@ -62,11 +62,11 @@ function Assert-Paths {
     $script:installParent = [IO.Directory]::GetParent($install).FullName
     $script:token = [IO.Path]::GetFileName($work)
     if ($token -notmatch '^[0-9a-f]{32}$') { throw 'Invalid update transaction identifier.' }
-    if (-not (Same-Path $stage (Join-Path $installParent ('.Orbit-update-stage-' + $token)))) { throw 'Stage path is outside the update scope.' }
-    if (-not (Same-Path $backup (Join-Path $installParent ('.Orbit-update-backup-' + $token)))) { throw 'Backup path is outside the update scope.' }
+    if (-not (Same-Path $stage (Join-Path $installParent ('.Orbit2-update-stage-' + $token)))) { throw 'Stage path is outside the update scope.' }
+    if (-not (Same-Path $backup (Join-Path $installParent ('.Orbit2-update-backup-' + $token)))) { throw 'Backup path is outside the update scope.' }
     if ((Within-Path $work $install) -or (Within-Path $work $stage) -or (Within-Path $work $backup)) { throw 'The update helper must run outside the application.' }
     if ($ExpectedVersion -notmatch '^\d+\.\d+\.\d+(\+[0-9A-Za-z.-]+)?$' -or $ExpectedSha256 -notmatch '^[0-9a-fA-F]{64}$') { throw 'Invalid release metadata.' }
-    if (-not (Same-Path $archive (Join-Path $work ('Orbit-' + $ExpectedVersion + '-win32-x64.zip')))) { throw 'Archive path is outside the transaction.' }
+    if (-not (Same-Path $archive (Join-Path $work ('Orbit2-' + $ExpectedVersion + '-win32-x64.zip')))) { throw 'Archive path is outside the transaction.' }
     if (-not [IO.Directory]::Exists($work)) { throw 'The update workspace is missing.' }
 }
 
@@ -83,7 +83,7 @@ function Write-Json([string]$name, $value) {
 }
 
 function Assert-AppFiles([string]$directory) {
-    foreach ($relative in @('Orbit.exe', 'resources\app.asar', 'resources\app.asar.unpacked\native\Orbit.Input.exe')) {
+    foreach ($relative in @('Orbit2.exe', 'resources\app.asar', 'resources\app.asar.unpacked\native\Orbit2.Input.exe')) {
         if (-not [IO.File]::Exists((Join-Path $directory $relative))) { throw 'The Orbit application is incomplete.' }
     }
 }
@@ -139,7 +139,7 @@ function Extract-Release {
             $name = $entry.FullName.Replace('\', '/')
             $directory = $name.EndsWith('/')
             $parts = $name.TrimEnd('/').Split('/')
-            if ($name.StartsWith('/') -or $parts[0] -cne 'Orbit-win32-x64') { throw 'The archive root is invalid.' }
+            if ($name.StartsWith('/') -or $parts[0] -cne 'Orbit2-win32-x64') { throw 'The archive root is invalid.' }
             foreach ($part in $parts) {
                 if (-not $part -or $part -eq '.' -or $part -eq '..' -or $part -match '[\x00-\x1f<>:"|?*]' -or $part.EndsWith('.') -or $part.EndsWith(' ') -or $part -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\.|$)') { throw 'An archive path is unsafe.' }
             }
@@ -204,7 +204,7 @@ function Run-SmokeTest {
     $stdout = Join-Path $work 'smoke.stdout'
     $stderr = Join-Path $work 'smoke.stderr'
     $script:ownedSmoke = New-Object Diagnostics.Process
-    $ownedSmoke.StartInfo.FileName = Join-Path $install 'Orbit.exe'
+    $ownedSmoke.StartInfo.FileName = Join-Path $install 'Orbit2.exe'
     $ownedSmoke.StartInfo.Arguments = '--smoke-test'
     $ownedSmoke.StartInfo.WorkingDirectory = $install
     $ownedSmoke.StartInfo.UseShellExecute = $false
@@ -263,16 +263,16 @@ try {
     Write-Json 'result.json' @{ ok = $true; version = $ExpectedVersion; backup = $backup }
     # Only the backup of this verified update is kept; older ones would add a full app copy per update.
     try {
-        foreach ($previous in [IO.Directory]::GetDirectories($installParent, '.Orbit-update-backup-*')) {
+        foreach ($previous in [IO.Directory]::GetDirectories($installParent, '.Orbit2-update-backup-*')) {
             try {
-                if ((Same-Path $previous $backup) -or [IO.Path]::GetFileName($previous) -notmatch '^\.Orbit-update-backup-[0-9a-f]{32}$') { continue }
+                if ((Same-Path $previous $backup) -or [IO.Path]::GetFileName($previous) -notmatch '^\.Orbit2-update-backup-[0-9a-f]{32}$') { continue }
                 if (([IO.File]::GetAttributes($previous) -band [IO.FileAttributes]::ReparsePoint) -ne 0) { continue }
                 Remove-Item -LiteralPath $previous -Recurse -Force
             } catch { }
         }
     } catch { }
     # The new version is verified; a failed restart must not roll it back.
-    try { [void](Start-Process -FilePath (Join-Path $install 'Orbit.exe') -WorkingDirectory $install -WindowStyle Hidden -PassThru) } catch { }
+    try { [void](Start-Process -FilePath (Join-Path $install 'Orbit2.exe') -WorkingDirectory $install -WindowStyle Hidden -PassThru) } catch { }
     exit 0
 } catch {
     $reason = $_.Exception.Message
@@ -294,7 +294,7 @@ try {
         try { Write-Json $(if ($Mode -eq 'Prepare') { 'prepared.json' } else { 'result.json' }) @{ ok = $false; error = $reason; rolledBack = $rolledBack } } catch { }
     }
     if ($parentExited -and ($rolledBack -or -not $oldMoved)) {
-        try { [void](Start-Process -FilePath (Join-Path $install 'Orbit.exe') -WorkingDirectory $install -WindowStyle Hidden -PassThru) } catch { }
+        try { [void](Start-Process -FilePath (Join-Path $install 'Orbit2.exe') -WorkingDirectory $install -WindowStyle Hidden -PassThru) } catch { }
     }
     exit 1
 }

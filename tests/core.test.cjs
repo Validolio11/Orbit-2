@@ -45,7 +45,7 @@ test('Windows action targets are allowlisted and paths reject embedded NULs', ()
 });
 
 test('preferences are validated without coercion', () => {
-  for (const patch of [{ version: 2 }, { triggerButton: 3 }, { theme: 'unknown' }, { enabled: 'true' }, { hoverDelay: 149 }, { hoverDelay: 2001 }, { activationMode: 'instant' }]) {
+  for (const patch of [{ version: 3 }, { triggerButton: 3 }, { theme: 'unknown' }, { enabled: 'true' }, { hoverDelay: 149 }, { hoverDelay: 2001 }, { activationMode: 'instant' }]) {
     assert.throws(() => validateState({ ...configuration(), ...patch }));
   }
   assert.throws(() => validateState({ ...configuration(), padding: 'x'.repeat(1024 * 1024) }), /oversized/);
@@ -165,11 +165,11 @@ test('dropped Explorer paths become folder, app or script actions and other file
 });
 
 test('only real programs in front are offered to the wheel "+" slot', () => {
-  assert.equal(foregroundCandidate('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Orbit\\Orbit.exe'), true);
-  assert.equal(foregroundCandidate('C:\\Orbit\\Orbit.exe', 'c:\\orbit\\orbit.exe'), false);
+  assert.equal(foregroundCandidate('C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', 'C:\\Orbit\\Orbit2.exe'), true);
+  assert.equal(foregroundCandidate('C:\\Orbit\\Orbit2.exe', 'c:\\orbit\\orbit2.exe'), false);
   for (const shell of ['C:\\Windows\\explorer.exe', 'C:\\Windows\\System32\\ApplicationFrameHost.exe', 'C:\\Windows\\SystemApps\\SearchHost.exe'])
-    assert.equal(foregroundCandidate(shell, 'C:\\Orbit\\Orbit.exe'), false);
-  for (const value of ['', null, 'chrome.exe', 'C:\\Docs\\file.txt', '\\\\server\\share\\app.exe']) assert.equal(foregroundCandidate(value, 'C:\\Orbit\\Orbit.exe'), false);
+    assert.equal(foregroundCandidate(shell, 'C:\\Orbit\\Orbit2.exe'), false);
+  for (const value of ['', null, 'chrome.exe', 'C:\\Docs\\file.txt', '\\\\server\\share\\app.exe']) assert.equal(foregroundCandidate(value, 'C:\\Orbit\\Orbit2.exe'), false);
 });
 
 test('wheel "+" slot defaults on, first-run hint defaults off for existing settings', () => {

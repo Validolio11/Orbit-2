@@ -6,7 +6,7 @@ const fs = require('node:fs/promises');
 (async()=>{
   const project = path.resolve(__dirname, '..');
   const packaged=process.argv.includes('--packaged');
-  const app = await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit-win32-x64','Orbit.exe'):require('electron'),cwd:project});
+  const app = await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit2-win32-x64','Orbit2.exe'):require('electron'),cwd:project});
   const errors=[];
   try {
     await app.firstWindow();
@@ -260,7 +260,7 @@ const fs = require('node:fs/promises');
     await page.locator('[data-page="settings"]').click();
     await command('export').click();
     await page.getByRole('status').filter({hasText:'Налаштування експортовано'}).waitFor();
-    const file=JSON.parse(await fs.readFile(exported,'utf8'));assert.equal(file.version,1);
+    const file=JSON.parse(await fs.readFile(exported,'utf8'));assert.equal(file.version,2);
     await command('import').click();await dialog().locator('#confirm-import').click();await waitSave();
     await page.getByRole('status').filter({hasText:'Налаштування імпортовано'}).waitFor();
     await page.locator('[data-page="menus"]').click();

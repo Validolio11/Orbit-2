@@ -61,6 +61,7 @@ internal static class MouseHook
         if (Array.IndexOf(args, "--self-test") >= 0) return RunSelfTest();
         foreach (string arg in args) if (arg.StartsWith("--icon=")) return ReadShellIcon(arg.Substring(7));
         foreach (string arg in args) if (arg.StartsWith("--action=")) return DoAction(arg.Substring(9));
+        foreach (string arg in args) if (arg.StartsWith("--keys=")) return DoKeys(arg.Substring(7));
         foreach (string arg in args) if (arg.StartsWith("--admin-task=")) return AdminTask.Run(arg.Substring(13));
         int parentId = 0;
         foreach (string arg in args)
@@ -282,13 +283,45 @@ internal static class MouseHook
             case "emoji": keys = new ushort[] { 0x5B, 0xBE }; break;
             case "dictation": keys = new ushort[] { 0x5B, 0x48 }; break;
             case "notifications": keys = new ushort[] { 0x5B, 0x4E }; break;
+            case "close-window": keys = new ushort[] { 0x12, 0x73 }; break;
+            case "minimize-window": keys = new ushort[] { 0x5B, 0x28 }; break;
+            case "maximize-window": keys = new ushort[] { 0x5B, 0x26 }; break;
+            case "desktop-next": keys = new ushort[] { 0x11, 0x5B, 0x27 }; break;
+            case "desktop-prev": keys = new ushort[] { 0x11, 0x5B, 0x25 }; break;
             default: Console.Error.WriteLine("Unsupported system action."); return 2;
         }
+        return SendKeys(keys);
+    }
+
+    // "Keys" actions: --keys=17,16,84 presses the virtual keys in order and releases them in reverse.
+    private static int DoKeys(string list)
+    {
+        string[] parts = list.Split(',');
+        if (parts.Length < 1 || parts.Length > 5) { Console.Error.WriteLine("Between one and five keys are required."); return 2; }
+        var keys = new ushort[parts.Length];
+        for (int index = 0; index < parts.Length; index++)
+        {
+            int code;
+            if (!int.TryParse(parts[index], out code) || code < 1 || code > 254) { Console.Error.WriteLine("Invalid virtual key."); return 2; }
+            keys[index] = (ushort)code;
+        }
+        return SendKeys(keys);
+    }
+
+    // Navigation keys and Win are extended keys; without the flag some programs read them as numpad keys.
+    private static bool Extended(ushort key)
+    {
+        return (key >= 0x21 && key <= 0x28) || key == 0x2D || key == 0x2E || key == 0x5B || key == 0x5C || key == 0x5D || key == 0x6F || key == 0x2C;
+    }
+
+    private static int SendKeys(ushort[] keys)
+    {
         var inputs = new INPUT[keys.Length * 2];
         for (int index = 0; index < keys.Length; index++)
         {
-            inputs[index].type = 1; inputs[index].value.keyboard.key = keys[index];
-            inputs[keys.Length + index].type = 1; inputs[keys.Length + index].value.keyboard.key = keys[keys.Length - index - 1]; inputs[keys.Length + index].value.keyboard.flags = 2;
+            ushort down = keys[index], up = keys[keys.Length - index - 1];
+            inputs[index].type = 1; inputs[index].value.keyboard.key = down; inputs[index].value.keyboard.flags = Extended(down) ? 1u : 0u;
+            inputs[keys.Length + index].type = 1; inputs[keys.Length + index].value.keyboard.key = up; inputs[keys.Length + index].value.keyboard.flags = 2u | (Extended(up) ? 1u : 0u);
         }
         return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT))) == inputs.Length ? 0 : 4;
     }

@@ -8,15 +8,15 @@ using System.Security;
 using System.Security.Principal;
 
 // The UAC prompt for creating the task names the helper by this title.
-[assembly: AssemblyTitle("Orbit")]
-[assembly: AssemblyProduct("Orbit")]
+[assembly: AssemblyTitle("Orbit 2")]
+[assembly: AssemblyProduct("Orbit 2")]
 
 // "Start as administrator" is a Task Scheduler task with the highest run level. Creating or removing it needs
 // one UAC confirmation; afterwards Windows starts Orbit elevated through the task without asking again.
 // The task passes Run()'s parameter as $(Arg0), so a hand-over keeps --hidden (sign-in) or --quit.
 internal static class AdminTask
 {
-    internal const string Name = "Orbit (administrator)";
+    internal const string Name = "Orbit 2 (administrator)";
     private const int Done = 0, Failed = 1, NotApplicable = 3, Canceled = 4;
     private const int TokenElevationType = 18, TokenElevation = 20, ElevationTypeLimited = 3, RunLevelHighest = 1;
 
@@ -91,12 +91,12 @@ internal static class AdminTask
         }
     }
 
-    // The helper ships in <Orbit>\resources\app.asar.unpacked\native; a development checkout has no Orbit.exe there.
+    // The helper ships in <Orbit>\resources\app.asar.unpacked\native; a development checkout has no Orbit2.exe there.
     private static string OrbitPath()
     {
         string native = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
         string root = Path.GetFullPath(Path.Combine(native, "..", "..", ".."));
-        string orbit = Path.Combine(root, "Orbit.exe");
+        string orbit = Path.Combine(root, "Orbit2.exe");
         return File.Exists(orbit) && File.Exists(Path.Combine(root, "resources", "app.asar")) ? orbit : null;
     }
 
@@ -133,7 +133,7 @@ internal static class AdminTask
         string user = WindowsIdentity.GetCurrent().User.Value;
         return "<?xml version=\"1.0\" encoding=\"UTF-16\"?>\n" +
             "<Task version=\"1.2\" xmlns=\"http://schemas.microsoft.com/windows/2004/02/mit/task\">\n" +
-            "  <RegistrationInfo><Author>Orbit</Author><Description>Starts Orbit with administrator rights without a UAC prompt, so the side mouse button also works in programs that run as administrator. Turn it off in Orbit settings.</Description></RegistrationInfo>\n" +
+            "  <RegistrationInfo><Author>Orbit 2</Author><Description>Starts Orbit with administrator rights without a UAC prompt, so the side mouse button also works in programs that run as administrator. Turn it off in Orbit settings.</Description></RegistrationInfo>\n" +
             "  <Principals><Principal id=\"Author\"><UserId>" + user + "</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>\n" +
             // Parallel lets a second start reach the running Orbit, which then shows its window or quits.
             "  <Settings><MultipleInstancesPolicy>Parallel</MultipleInstancesPolicy><DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" +

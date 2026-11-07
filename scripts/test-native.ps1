@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$nativePath = Join-Path $projectRoot 'native\Orbit.Input.exe'
+$nativePath = Join-Path $projectRoot 'native\Orbit2.Input.exe'
 if (-not (Test-Path -LiteralPath $nativePath)) { & (Join-Path $PSScriptRoot 'build-native.ps1') }
 
 function Test-NativeLifecycle([string] $arguments, [bool] $sendQuit) {

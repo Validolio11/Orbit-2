@@ -14,10 +14,10 @@ function prepareInElectron(){
 
 async function verifyPreparation(){
   assert.ok(process.versions.electron,'Preparation must be verified inside Electron');
-  const packagedAsar=path.resolve(__dirname,'../dist/Orbit-win32-x64/resources/app.asar');
+  const packagedAsar=path.resolve(__dirname,'../dist/Orbit2-win32-x64/resources/app.asar');
   assert.ok(require('node:fs').statSync(packagedAsar).isDirectory(),'Electron asar handling must be active, as in Orbit');
   const root=await fs.mkdtemp(path.join(os.tmpdir(),'orbit-release-verify-'));
-  const updater=createUpdater({version:'0.1.0',repo:'Validolio11/Orbit',installDir:path.resolve(__dirname,'../dist/Orbit-win32-x64'),updatesDir:root,helperPath:path.resolve(__dirname,'../native/Update.ps1'),isolated:true,onStatus:s=>{if(s.phase!=='downloading'||s.progress===0||s.progress===100)console.log(s.phase,s.version||'',s.message||'');}});
+  const updater=createUpdater({version:'0.1.0',repo:'Validolio11/Orbit-2',installDir:path.resolve(__dirname,'../dist/Orbit2-win32-x64'),updatesDir:root,helperPath:path.resolve(__dirname,'../native/Update.ps1'),isolated:true,onStatus:s=>{if(s.phase!=='downloading'||s.progress===0||s.progress===100)console.log(s.phase,s.version||'',s.message||'');}});
   try{
     const available=await updater.check();assert.equal(available.phase,'available',available.message);
     const ready=await updater.download();assert.equal(ready.phase,'ready',ready.message);
@@ -35,7 +35,7 @@ async function verifyPreparation(){
   if(process.argv.includes('--prepare-only')){await verifyPreparation();return;}
   if(!process.argv.includes('--ui-only'))prepareInElectron();
   const {_electron}=require('playwright');
-  const app=await _electron.launch({args:['--e2e'],executablePath:path.resolve(__dirname,'../dist/Orbit-win32-x64/Orbit.exe')});
+  const app=await _electron.launch({args:['--e2e'],executablePath:path.resolve(__dirname,'../dist/Orbit2-win32-x64/Orbit2.exe')});
   try{
     await app.firstWindow();let page;
     for(let n=0;n<100;n++){page=app.windows().find(w=>w.url().endsWith('/index.html'));if(page)break;await new Promise(resolve=>setTimeout(resolve,50));}

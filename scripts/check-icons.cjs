@@ -7,7 +7,7 @@ const path = require('node:path');
   const project=path.resolve(__dirname,'..');
   const dpi150=process.argv.includes('--dpi150');
   const packaged=process.argv.includes('--packaged');
-  const app=await _electron.launch({args:[...(packaged?[]:[project]),'--e2e',...(dpi150?['--force-device-scale-factor=1.5']:[])],executablePath:packaged?path.join(project,'dist/Orbit-win32-x64/Orbit.exe'):require('electron'),cwd:project});
+  const app=await _electron.launch({args:[...(packaged?[]:[project]),'--e2e',...(dpi150?['--force-device-scale-factor=1.5']:[])],executablePath:packaged?path.join(project,'dist/Orbit2-win32-x64/Orbit2.exe'):require('electron'),cwd:project});
   try{
     await app.firstWindow();
     let page;

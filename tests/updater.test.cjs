@@ -6,9 +6,9 @@ const os=require('node:os');
 const {createHash}=require('node:crypto');
 const {EventEmitter}=require('node:events');
 const {createUpdater,compareVersions,selectRelease,isAllowedURL,validatePaths,PRODUCT}=require('../src/updater.cjs');
-const repo='Validolio11/Orbit',payload=Buffer.from('fixture archive bytes');
+const repo='Validolio11/Orbit-2',payload=Buffer.from('fixture archive bytes');
 const digest=createHash('sha256').update(payload).digest('hex');
-const release=(overrides={})=>({draft:false,prerelease:false,tag_name:'v0.2.0',assets:[{name:'Orbit-0.2.0-win32-x64.zip',state:'uploaded',size:payload.length,digest:'sha256:'+digest,browser_download_url:`https://github.com/${repo}/releases/download/v0.2.0/Orbit-0.2.0-win32-x64.zip`}],...overrides});
+const release=(overrides={})=>({draft:false,prerelease:false,tag_name:'v0.2.0',assets:[{name:'Orbit2-0.2.0-win32-x64.zip',state:'uploaded',size:payload.length,digest:'sha256:'+digest,browser_download_url:`https://github.com/${repo}/releases/download/v0.2.0/Orbit2-0.2.0-win32-x64.zip`}],...overrides});
 
 test('update versions compare numerically, honor prereleases and reject malformed values',()=>{
   assert.ok(compareVersions('1.10.0','1.9.9')>0);
@@ -23,14 +23,14 @@ test('only newer stable releases with the exact Windows asset and SHA-256 are el
   assert.equal(selectRelease(release(),'0.2.0',repo),null);
   assert.equal(selectRelease(release(),'1.0.0',repo),null);
   for(const r of [release({draft:true}),release({prerelease:true}),release({assets:[]}),release({assets:[...release().assets,...release().assets]}),release({tag_name:'v0.3.0-rc.1'})])assert.throws(()=>selectRelease(r,'0.1.1',repo));
-  for(const patch of [{digest:null},{size:0},{size:2**31},{browser_download_url:'https://evil.example/Orbit.exe'},{state:'new'}])assert.throws(()=>selectRelease(release({assets:[{...release().assets[0],...patch}]}),'0.1.1',repo));
+  for(const patch of [{digest:null},{size:0},{size:2**31},{browser_download_url:'https://evil.example/Orbit2.exe'},{state:'new'}])assert.throws(()=>selectRelease(release({assets:[{...release().assets[0],...patch}]}),'0.1.1',repo));
 });
 
 test('update transport restricts protocol, credentials, repository and asset redirect hosts',()=>{
   assert.equal(isAllowedURL(`https://api.github.com/repos/${repo}/releases/latest`,repo,'api'),true);
   assert.equal(isAllowedURL(release().assets[0].browser_download_url,repo,'asset'),true);
   assert.equal(isAllowedURL('https://release-assets.githubusercontent.com/assets/file?signature=abc',repo,'asset',true),true);
-  for(const url of ['http://github.com/Validolio11/Orbit/releases/download/v1/a','https://github.com.evil.example/Validolio11/Orbit/releases/download/a','https://user:pass@github.com/Validolio11/Orbit/releases/download/a','https://github.com/another/repo/releases/download/a','https://release-assets.githubusercontent.com.evil.example/file'])assert.equal(isAllowedURL(url,repo,'asset',true),false);
+  for(const url of ['http://github.com/Validolio11/Orbit-2/releases/download/v1/a','https://github.com.evil.example/Validolio11/Orbit-2/releases/download/a','https://user:pass@github.com/Validolio11/Orbit-2/releases/download/a','https://github.com/another/repo/releases/download/a','https://release-assets.githubusercontent.com.evil.example/file'])assert.equal(isAllowedURL(url,repo,'asset',true),false);
   assert.throws(()=>validatePaths(path.parse(process.cwd()).root,path.join(os.tmpdir(),'outside'),__filename));
   assert.throws(()=>validatePaths(process.cwd(),path.join(process.cwd(),'updates'),__filename));
 });
@@ -73,7 +73,7 @@ test('download validates hash, prepares files, reports progress and blocks appli
     (async()=>{
       const stage=arg('-StagePath');
       await fs.mkdir(path.join(stage,'resources','app.asar.unpacked','native'),{recursive:true});
-      for(const name of ['Orbit.exe','resources/app.asar','resources/app.asar.unpacked/native/Orbit.Input.exe','resources/app.asar.unpacked/native/Update.ps1'])await fs.writeFile(path.join(stage,name),'fixture');
+      for(const name of ['Orbit2.exe','resources/app.asar','resources/app.asar.unpacked/native/Orbit2.Input.exe','resources/app.asar.unpacked/native/Update.ps1'])await fs.writeFile(path.join(stage,name),'fixture');
       await fs.writeFile(path.join(stage,'orbit-release.json'),JSON.stringify({product:PRODUCT,version:'0.2.0',platform:'win32',arch:'x64'}));
       await fs.writeFile(path.join(arg('-WorkDir'),'prepared.json'),JSON.stringify({ok:true}));
       child.emit('exit',0);
@@ -103,7 +103,7 @@ test('installer arms only after helper readiness and saved state; app shutdown p
     (async()=>{
       if(arg('-Mode')==='Prepare'){
         const stage=arg('-StagePath');
-        for(const name of ['Orbit.exe','resources/app.asar','resources/app.asar.unpacked/native/Orbit.Input.exe','resources/app.asar.unpacked/native/Update.ps1']){await fs.mkdir(path.dirname(path.join(stage,name)),{recursive:true});await fs.writeFile(path.join(stage,name),'fixture');}
+        for(const name of ['Orbit2.exe','resources/app.asar','resources/app.asar.unpacked/native/Orbit2.Input.exe','resources/app.asar.unpacked/native/Update.ps1']){await fs.mkdir(path.dirname(path.join(stage,name)),{recursive:true});await fs.writeFile(path.join(stage,name),'fixture');}
         await fs.writeFile(path.join(stage,'orbit-release.json'),JSON.stringify({product:PRODUCT,version:'0.2.0',platform:'win32',arch:'x64'}));
         await fs.writeFile(path.join(work,'prepared.json'),'{"ok":true}');child.emit('exit',0);
       }else{
@@ -138,14 +138,14 @@ test('cleanup removes finished and abandoned update files but keeps an interrupt
   const {updater,root,updates}=await fixture(t);
   const id=n=>String(n).repeat(32);
   const make=async(dir,files=[])=>{await fs.mkdir(dir,{recursive:true});for(const file of files)await fs.writeFile(path.join(dir,file),'{}');};
-  await make(path.join(updates,id(1)),['Orbit-0.2.0-win32-x64.zip','commit.json','result.json']);
+  await make(path.join(updates,id(1)),['Orbit2-0.2.0-win32-x64.zip','commit.json','result.json']);
   await make(path.join(updates,id(2)),['commit.json']);
   await make(path.join(updates,id(3)),['prepared.json']);
   await make(path.join(updates,'not-an-update'));
-  for(const n of [1,2,4])await make(path.join(root,`.Orbit-update-stage-${id(n)}`),['Orbit.exe']);
-  await make(path.join(root,`.Orbit-update-backup-${id(1)}`),['Orbit.exe']);
+  for(const n of [1,2,4])await make(path.join(root,`.Orbit2-update-stage-${id(n)}`),['Orbit2.exe']);
+  await make(path.join(root,`.Orbit2-update-backup-${id(1)}`),['Orbit2.exe']);
   await updater.cleanup();
   assert.deepEqual((await fs.readdir(updates)).sort(),[id(2),'not-an-update'].sort());
-  assert.deepEqual((await fs.readdir(root)).filter(name=>name.startsWith('.Orbit-')).sort(),[`.Orbit-update-backup-${id(1)}`,`.Orbit-update-stage-${id(2)}`].sort());
+  assert.deepEqual((await fs.readdir(root)).filter(name=>name.startsWith('.Orbit2-')).sort(),[`.Orbit2-update-backup-${id(1)}`,`.Orbit2-update-stage-${id(2)}`].sort());
   assert.ok((await fs.readdir(root)).includes('app'));
 });

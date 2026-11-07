@@ -1,11 +1,11 @@
 {
-  "name": "orbit-desktop",
-  "productName": "Orbit",
-  "version": "0.1.16",
+  "name": "orbit2-desktop",
+  "productName": "Orbit 2",
+  "version": "2.0.0",
   "private": true,
-  "description": "Orbit — a mouse-first radial launcher for Windows",
+  "description": "Orbit 2 — a mouse-first radial launcher for Windows",
   "main": "src/main.cjs",
-  "author": "Orbit",
+  "author": "Orbit 2",
   "license": "UNLICENSED",
   "scripts": {
     "icons": "node scripts/build-icons.cjs",
@@ -16,7 +16,7 @@
     "test:ui": "node scripts/check-ui.cjs",
     "test:search": "node scripts/check-app-search.cjs",
     "smoke": "npm run native && electron . --smoke-test",
-    "package": "npm run icons && npm run native && electron-packager . Orbit --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/orbit.ico --asar.unpackDir=native --ignore=\"(^/release|^/\\.git($|/)|^/\\.github($|/)|^/tests|^/test-results|^/output|^/docs|^/dist|playwright.config|package-lock)\"",
+    "package": "npm run icons && npm run native && electron-packager . Orbit2 --platform=win32 --arch=x64 --out=dist --overwrite --icon=assets/orbit.ico --asar.unpackDir=native --ignore=\"(^/release|^/\\.git($|/)|^/\\.github($|/)|^/tests|^/test-results|^/output|^/docs|^/dist|playwright.config|package-lock)\"",
     "release:archive": "node scripts/create-release.cjs",
     "installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "release": "npm run package && npm run release:archive",
@@ -27,7 +27,8 @@
     "test:drag": "node scripts/check-drag.cjs",
     "test:icons": "node scripts/check-icons.cjs",
     "test:wheel-drag": "node scripts/check-wheel-drag.cjs",
-    "test:wheel-add": "node scripts/check-wheel-add.cjs"
+    "test:wheel-add": "node scripts/check-wheel-add.cjs",
+    "test:orbit2": "node scripts/check-orbit2.cjs"
   },
   "devDependencies": {
     "@electron/packager": "^20.3.0",
@@ -41,10 +42,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Validolio11/Orbit.git"
+    "url": "https://github.com/Validolio11/Orbit-2.git"
   },
-  "homepage": "https://github.com/Validolio11/Orbit#readme",
+  "homepage": "https://github.com/Validolio11/Orbit-2#readme",
   "bugs": {
-    "url": "https://github.com/Validolio11/Orbit/issues"
+    "url": "https://github.com/Validolio11/Orbit-2/issues"
   }
 }

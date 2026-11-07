@@ -2,8 +2,8 @@ param([string]$ArchivePath, [string]$OutputPath)
 $ErrorActionPreference = 'Stop'
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $version = (Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'package.json') | ConvertFrom-Json).version
-if (-not $ArchivePath) { $ArchivePath = Join-Path $projectRoot "release\Orbit-$version-win32-x64.zip" }
-if (-not $OutputPath) { $OutputPath = Join-Path $projectRoot "release\Orbit-Setup-$version.exe" }
+if (-not $ArchivePath) { $ArchivePath = Join-Path $projectRoot "release\Orbit2-$version-win32-x64.zip" }
+if (-not $OutputPath) { $OutputPath = Join-Path $projectRoot "release\Orbit2-Setup-$version.exe" }
 $ArchivePath = [System.IO.Path]::GetFullPath($ArchivePath)
 $OutputPath = [System.IO.Path]::GetFullPath($OutputPath)
 if (-not (Test-Path -LiteralPath $ArchivePath)) { throw "Release archive not found: $ArchivePath" }

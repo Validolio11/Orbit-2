@@ -3,7 +3,7 @@ dist/
 test-results/
 playwright-report/
 output/
-native/Orbit.Input.exe
+native/Orbit2.Input.exe
 *.log
 docs/*.png
 .env

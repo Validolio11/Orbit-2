@@ -5,7 +5,7 @@ const path=require('node:path');
 (async()=>{
   const project=path.resolve(__dirname,'..');
   const packaged=process.argv.includes('--packaged');
-  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit-win32-x64','Orbit.exe'):require('electron'),cwd:project});
+  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist','Orbit2-win32-x64','Orbit2.exe'):require('electron'),cwd:project});
   try{
     await app.firstWindow();let page;
     for(let n=0;n<100;n++){page=app.windows().find(p=>p.url().endsWith('/index.html'));if(page)break;await new Promise(r=>setTimeout(r,50));}

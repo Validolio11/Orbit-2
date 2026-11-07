@@ -1,8 +1,12 @@
 const SYSTEM_ACTIONS = new Set(['explorer', 'task-manager', 'screenshot', 'mute', 'volume-up', 'volume-down', 'desktop', 'settings', 'lock', 'media-play',
   'control-panel', 'recycle-bin', 'search', 'run', 'task-view', 'clipboard', 'emoji', 'dictation', 'notifications', 'sound-settings', 'bluetooth',
-  'media-prev', 'media-next', 'calculator', 'notepad']);
-const ACTION_KINDS = new Set(['app', 'folder', 'script', 'system', 'group']);
+  'media-prev', 'media-next', 'calculator', 'notepad', 'close-window', 'minimize-window', 'maximize-window', 'desktop-next', 'desktop-prev']);
+const ACTION_KINDS = new Set(['app', 'folder', 'script', 'system', 'keys', 'text', 'group']);
+const ACCENTS = ['blue', 'violet', 'green', 'amber', 'rose', 'mono'];
+// Global shortcuts that open the wheel; '' turns the keyboard shortcut off.
+const HOTKEYS = ['Control+Space', 'Control+Shift+Space', 'Control+Alt+Space', 'Alt+Shift+Space', 'Control+`', ''];
 const { validatePackagedTarget } = require('./app-catalog.cjs');
+const { parseShortcut } = require('./shortcuts.cjs');
 
 function string(value, name, maximum = 4096) {
   if (typeof value !== 'string' || value.length > maximum || value.includes('\0')) throw new Error(`Invalid ${name}.`);
@@ -24,6 +28,11 @@ function validateAction(value, depth = 0, ids = new Set()) {
     validatePackagedTarget(result.target, result.args);
   }
   if (value.kind === 'system' && !SYSTEM_ACTIONS.has(result.target)) throw new Error('Unsupported Windows action.');
+  if (value.kind === 'keys') { result.target = parseShortcut(result.target).text; result.args = ''; }
+  if (value.kind === 'text') {
+    if (!result.target) throw new Error('Додайте текст, який потрібно вставити.');
+    result.args = '';
+  }
   if (value.kind === 'group') {
     if (!Array.isArray(value.children) || value.children.length > 12) throw new Error('A group can contain up to 12 actions.');
     result.children = value.children.map(child => validateAction(child, depth + 1, ids));
@@ -33,7 +42,11 @@ function validateAction(value, depth = 0, ids = new Set()) {
 
 function validateState(value) {
   if (!value || typeof value !== 'object' || JSON.stringify(value).length > 1024 * 1024) throw new Error('Invalid or oversized configuration.');
-  if (value.version !== 1) throw new Error('Unsupported configuration version.');
+  // Version 1 is Orbit's format; Orbit 2 reads it unchanged and adds its own preferences with defaults.
+  if (value.version !== 1 && value.version !== 2) throw new Error('Unsupported configuration version.');
+  if (value.accent !== undefined && !ACCENTS.includes(value.accent)) throw new Error('Invalid accent color.');
+  if (value.hotkey !== undefined && !HOTKEYS.includes(value.hotkey)) throw new Error('Invalid keyboard shortcut.');
+  for (const key of ['wheelLabels', 'contextMenus', 'autoBackup']) if (value[key] !== undefined && typeof value[key] !== 'boolean') throw new Error(`Invalid ${key} preference.`);
   if (!['dark', 'light', 'system'].includes(value.theme)) throw new Error('Invalid theme.');
   if (![4, 5].includes(value.triggerButton)) throw new Error('Choose mouse button 4 or 5.');
   if (!['release', 'hover', 'click'].includes(value.activationMode)) throw new Error('Invalid activation mode.');
@@ -55,12 +68,35 @@ function validateState(value) {
     if (!Array.isArray(menu.items) || menu.items.length > 12) throw new Error('Each wheel can have up to 12 actions.');
     const name = string(menu.name, 'menu name', 100).trim();
     if (!name) throw new Error('A menu needs a name.');
-    return { id, name, icon: string(menu.icon ?? 'orbit', 'menu icon', 100), items: menu.items.map(item => validateAction(item, 0, ids)) };
+    const apps = validateMenuApps(menu.apps);
+    return { id, name, icon: string(menu.icon ?? 'orbit', 'menu icon', 100), ...(apps.length ? { apps } : {}), items: menu.items.map(item => validateAction(item, 0, ids)) };
   });
   if (!menus.some(menu => menu.id === value.activeMenuId)) throw new Error('The active menu does not exist.');
-  return { version: 1, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
+  return { version: 2, accent: value.accent ?? 'blue', hotkey: value.hotkey ?? 'Control+Space', wheelLabels: value.wheelLabels ?? true,
+    contextMenus: value.contextMenus ?? true, autoBackup: value.autoBackup ?? true, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
     hoverDelay: value.hoverDelay, enabled: value.enabled, reducedMotion: value.reducedMotion, closeOnOutsideClick: value.closeOnOutsideClick ?? true, launchAtLogin: value.launchAtLogin ?? true,
     wheelAddSlot: value.wheelAddSlot ?? true, introPending: value.introPending ?? false, wheelSize: value.wheelSize ?? 520, menus, activeMenuId: value.activeMenuId };
+}
+
+// A menu can be linked to programs by their executable file names; the wheel then opens that menu over them.
+function programName(value) {
+  if (typeof value !== 'string') return '';
+  return value.split(/[\\/]/).pop().trim().toLowerCase();
+}
+function validateMenuApps(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 30) throw new Error('A menu can be linked to up to 30 programs.');
+  const names = value.map(name => {
+    const result = programName(string(name, 'program name', 260));
+    if (!/^[^<>:"|?*\x00-\x1f]+\.exe$/i.test(result)) throw new Error('Linked programs must be .exe file names.');
+    return result;
+  });
+  return [...new Set(names)];
+}
+function menuForProgram(state, exePath) {
+  const name = programName(exePath);
+  if (!state || state.contextMenus === false || !name) return null;
+  return state.menus.find(menu => menu.apps?.includes(name)) || null;
 }
 
 function parseArguments(value) {
@@ -128,11 +164,11 @@ function droppedAction(filePath, isDirectory) {
 
 // Windows shell and Orbit's own processes are never offered as "add the program you are in".
 const SHELL_PROCESSES = new Set(['explorer.exe', 'applicationframehost.exe', 'searchhost.exe', 'searchapp.exe', 'shellexperiencehost.exe',
-  'startmenuexperiencehost.exe', 'textinputhost.exe', 'lockapp.exe', 'systemsettings.exe', 'orbit.input.exe']);
+  'startmenuexperiencehost.exe', 'textinputhost.exe', 'lockapp.exe', 'systemsettings.exe', 'orbit2.input.exe', 'orbit.input.exe']);
 function foregroundCandidate(exePath, ownExe) {
   if (typeof exePath !== 'string' || !/^[a-z]:\\.+\.exe$/i.test(exePath) || exePath.length > 1024) return false;
   if (typeof ownExe === 'string' && exePath.toLowerCase() === ownExe.toLowerCase()) return false;
   return !SHELL_PROCESSES.has(exePath.split('\\').pop().toLowerCase());
 }
 
-module.exports = { foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, pointIsOutsideWheel, shouldCloseWheelOnClick };
+module.exports = { ACCENTS, HOTKEYS, programName, menuForProgram, foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, pointIsOutsideWheel, shouldCloseWheelOnClick };

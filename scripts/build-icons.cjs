@@ -33,4 +33,4 @@ for (let index = 0; index < images.length; index++) {
 fs.writeFileSync(path.join(assets, 'orbit.ico'), Buffer.concat([directory, ...images.map(image => image.png)]));
 fs.writeFileSync(path.join(assets, 'orbit.png'), raster(512));
 for (const image of images) fs.writeFileSync(path.join(assets, `orbit-${image.size}.png`), image.png);
-console.log(`Orbit icon built: ${sizes.join(', ')}px ICO + 512px PNG`);
+console.log(`Orbit 2 icon built: ${sizes.join(', ')}px ICO + 512px PNG`);

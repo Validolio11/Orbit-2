@@ -6,7 +6,7 @@ const { createHash, randomBytes } = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { Readable } = require('node:stream');
 
-const PRODUCT = 'com.creationsoft.orbit';
+const PRODUCT = 'com.creationsoft.orbit2';
 const MAX_DOWNLOAD_BYTES = 1024 * 1024 * 1024;
 const ASSET_HOSTS = new Set(['release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com']);
 
@@ -64,9 +64,9 @@ function selectRelease(release, currentVersion, repo) {
   const parsed = parseVersion(version);
   if (parsed.pre.length) throw new UpdateError('Тестові версії не встановлюються автоматично.');
   if (compareVersions(version, currentVersion) <= 0) return null;
-  const name = `Orbit-${version}-win32-x64.zip`;
+  const name = `Orbit2-${version}-win32-x64.zip`;
   const matching = Array.isArray(release.assets) ? release.assets.filter(asset => asset.name === name) : [];
-  if (matching.length !== 1) throw new UpdateError('Для цієї версії ще немає сумісного Windows-пакета Orbit.');
+  if (matching.length !== 1) throw new UpdateError('Для цієї версії ще немає сумісного Windows-пакета Orbit 2.');
   const asset = matching[0];
   const expectedURL = `https://github.com/${repo}/releases/download/${encodeURIComponent(release.tag_name)}/${encodeURIComponent(name)}`;
   if (asset.state !== 'uploaded' || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_DOWNLOAD_BYTES || !/^sha256:[0-9a-f]{64}$/i.test(asset.digest || '') || asset.browser_download_url !== expectedURL) throw new UpdateError('Пакет оновлення не пройшов перевірку метаданих.');
@@ -95,7 +95,7 @@ function inside(candidate, directory) {
 function validatePaths(installDir, updatesDir, helperPath) {
   for (const value of [installDir, updatesDir, helperPath]) if (typeof value !== 'string' || !path.isAbsolute(value) || value.includes('\0')) throw new UpdateError('Шлях оновлення має бути абсолютним.');
   const install = path.resolve(installDir), updates = path.resolve(updatesDir), helper = path.resolve(helperPath);
-  if (install === path.parse(install).root || inside(updates, install)) throw new UpdateError('Каталог оновлень має бути поза папкою Orbit.');
+  if (install === path.parse(install).root || inside(updates, install)) throw new UpdateError('Каталог оновлень має бути поза папкою Orbit 2.');
   return { install, updates, helper };
 }
 
@@ -108,13 +108,13 @@ async function readSmallJSON(file) {
 async function validatePrepared(stage, version) {
   const marker = await readSmallJSON(path.join(stage, 'orbit-release.json'));
   if (marker.product !== PRODUCT || marker.version !== version || marker.platform !== 'win32' || marker.arch !== 'x64') throw new UpdateError('Пакет не відповідає версії Orbit для Windows x64.');
-  for (const relative of ['Orbit.exe', 'resources/app.asar', 'resources/app.asar.unpacked/native/Orbit.Input.exe', 'resources/app.asar.unpacked/native/Update.ps1']) {
-    if (!(await fsp.stat(path.join(stage, relative))).isFile()) throw new UpdateError('Пакет Orbit неповний.');
+  for (const relative of ['Orbit2.exe', 'resources/app.asar', 'resources/app.asar.unpacked/native/Orbit2.Input.exe', 'resources/app.asar.unpacked/native/Update.ps1']) {
+    if (!(await fsp.stat(path.join(stage, relative))).isFile()) throw new UpdateError('Пакет Orbit 2 неповний.');
   }
 }
 
 function createUpdater(options) {
-  const { version, repo = 'Validolio11/Orbit', onStatus = () => {}, beforeInstall = async () => {}, onInstallReady, isolated = false,
+  const { version, repo = 'Validolio11/Orbit-2', onStatus = () => {}, beforeInstall = async () => {}, onInstallReady, isolated = false,
     parentPid = process.pid, getNativePid = () => 0, request = requestHTTPS, launch = spawn } = options;
   parseVersion(version); validateRepo(repo);
   const paths = validatePaths(options.installDir, options.updatesDir, options.helperPath);
@@ -141,7 +141,7 @@ function createUpdater(options) {
     const previous = prepared;
     prepared = null;
     if (!/^[0-9a-f]{32}$/.test(previous.id) || await fsp.lstat(previous.backup).catch(() => null)) return;
-    await removeOwnedDirectory(previous.stage, path.dirname(paths.install), `.Orbit-update-stage-${previous.id}`).catch(() => {});
+    await removeOwnedDirectory(previous.stage, path.dirname(paths.install), `.Orbit2-update-stage-${previous.id}`).catch(() => {});
     await removeOwnedDirectory(previous.workDir, paths.updates, previous.id).catch(() => {});
   }
 
@@ -149,7 +149,7 @@ function createUpdater(options) {
     let url = initial;
     for (let count = 0; count <= 5; count++) {
       if (!isAllowedURL(url, repo, kind, count > 0)) throw new UpdateError('Сервер повернув неприпустиме посилання оновлення.');
-      const response = await request(url, { signal, headers: { 'User-Agent': `Orbit/${version}`, Accept: kind === 'api' ? 'application/vnd.github+json' : 'application/octet-stream', 'X-GitHub-Api-Version': '2026-03-10' } });
+      const response = await request(url, { signal, headers: { 'User-Agent': `Orbit2/${version}`, Accept: kind === 'api' ? 'application/vnd.github+json' : 'application/octet-stream', 'X-GitHub-Api-Version': '2026-03-10' } });
       if (![301, 302, 303, 307, 308].includes(response.statusCode)) return response;
       response.body?.destroy?.();
       const location = response.headers?.location;
@@ -208,7 +208,7 @@ function createUpdater(options) {
       await removeOwnedDirectory(work, paths.updates, entry.name).catch(() => {});
     }
     for (const entry of await fsp.readdir(parent, { withFileTypes: true }).catch(() => [])) {
-      const match = /^\.Orbit-update-stage-([0-9a-f]{32})$/.exec(entry.name);
+      const match = /^\.Orbit2-update-stage-([0-9a-f]{32})$/.exec(entry.name);
       if (!entry.isDirectory() || !match || kept.has(match[1])) continue;
       await removeOwnedDirectory(path.join(parent, entry.name), parent, entry.name).catch(() => {});
     }
@@ -222,8 +222,8 @@ function createUpdater(options) {
       const journal = await readSmallJSON(path.join(paths.updates, entry.name, 'journal.json')).catch(() => ({}));
       const target = typeof journal.version === 'string' ? ` до ${journal.version}` : '';
       return publish('error', { message: result.rolledBack === false && typeof result.error === 'string' && result.error.includes('recovery')
-        ? `Оновлення${target} не встановилося, а відновити попередню версію не вдалося. Перевстановіть Orbit з GitHub.`
-        : `Оновлення${target} не встановилося, Orbit працює на попередній версії. Спробуйте ще раз.` });
+        ? `Оновлення${target} не встановилося, а відновити попередню версію не вдалося. Перевстановіть Orbit 2 з GitHub.`
+        : `Оновлення${target} не встановилося, Orbit 2 працює на попередній версії. Спробуйте ще раз.` });
     }
     return null;
   }
@@ -260,7 +260,7 @@ function createUpdater(options) {
         const id = randomBytes(16).toString('hex');
         const workDir = path.join(paths.updates, id);
         const parent = path.dirname(paths.install);
-        prepared = { id, workDir, archive: path.join(workDir, selected.name), stage: path.join(parent, `.Orbit-update-stage-${id}`), backup: path.join(parent, `.Orbit-update-backup-${id}`), version: selected.version, sha256: selected.sha256 };
+        prepared = { id, workDir, archive: path.join(workDir, selected.name), stage: path.join(parent, `.Orbit2-update-stage-${id}`), backup: path.join(parent, `.Orbit2-update-backup-${id}`), version: selected.version, sha256: selected.sha256 };
         await fsp.mkdir(workDir, { recursive: true });
         prepared.helper = await copyHelper(workDir);
         publish('downloading', { version: selected.version, releaseUrl: selected.releaseUrl, progress: 0 });
@@ -301,7 +301,7 @@ function createUpdater(options) {
         for (const name of ['ready.json', 'commit.json', 'abort.json', 'result.json']) await fsp.unlink(path.join(prepared.workDir, name)).catch(() => {});
         prepared.helper = await copyHelper(prepared.workDir);
         const nativePid = getNativePid() || 0;
-        if (!Number.isSafeInteger(parentPid) || parentPid <= 0 || !Number.isSafeInteger(nativePid) || nativePid < 0) throw new UpdateError('Неправильний стан процесу Orbit.');
+        if (!Number.isSafeInteger(parentPid) || parentPid <= 0 || !Number.isSafeInteger(nativePid) || nativePid < 0) throw new UpdateError('Неправильний стан процесу Orbit 2.');
         const child = runHelper(['-Mode', 'Install', '-InstallDir', paths.install, '-StagePath', prepared.stage, '-BackupPath', prepared.backup, '-ArchivePath', prepared.archive, '-WorkDir', prepared.workDir, '-ExpectedVersion', prepared.version, '-ExpectedSha256', prepared.sha256, '-ParentPid', String(parentPid), '-NativePid', String(nativePid), '-Detach']);
         // The launcher exits once it has started the independent installer, which then reports readiness itself.
         let launchFailed = false;
@@ -310,7 +310,7 @@ function createUpdater(options) {
           const deadline = Date.now() + 15000;
           let ready = false;
           while (!ready && Date.now() < deadline && !disposed) {
-            if (launchFailed) throw new UpdateError('Модуль встановлення не запустився. Orbit залишився відкритим.');
+            if (launchFailed) throw new UpdateError('Модуль встановлення не запустився. Orbit 2 залишився відкритим.');
             try { const value = await readSmallJSON(path.join(prepared.workDir, 'ready.json')); ready = value.token === prepared.id && Number.isSafeInteger(value.pid) && value.pid > 0; } catch { }
             if (!ready) await new Promise(resolve => setTimeout(resolve, 50));
           }

@@ -36,35 +36,35 @@ function Wait-Helper($process, [int]$expected) {
 }
 function New-Case([string]$name, [bool]$badSmoke = $false, [string]$markerVersion = '0.2.0', [bool]$traversal = $false) {
     $root = Join-Path $testRoot $name
-    $install = Join-Path $root 'Orbit-win32-x64'
+    $install = Join-Path $root 'Orbit2-win32-x64'
     $token = [Guid]::NewGuid().ToString('N')
     $work = Join-Path $root ('updates\' + $token)
     $source = Join-Path $root 'payload'
     foreach ($directory in @($install, $source)) {
         [void][IO.Directory]::CreateDirectory((Join-Path $directory 'resources\app.asar.unpacked\native'))
-        Copy-Item -LiteralPath (Join-Path $testRoot 'Fixture.exe') -Destination (Join-Path $directory 'Orbit.exe')
+        Copy-Item -LiteralPath (Join-Path $testRoot 'Fixture.exe') -Destination (Join-Path $directory 'Orbit2.exe')
         Write-Text (Join-Path $directory 'resources\app.asar') 'fixture asar'
-        Write-Text (Join-Path $directory 'resources\app.asar.unpacked\native\Orbit.Input.exe') 'fixture native'
+        Write-Text (Join-Path $directory 'resources\app.asar.unpacked\native\Orbit2.Input.exe') 'fixture native'
         Copy-Item -LiteralPath $helper -Destination (Join-Path $directory 'resources\app.asar.unpacked\native\Update.ps1')
     }
     Write-Text (Join-Path $install 'old.txt') 'previous version'
     Write-Text (Join-Path $source 'new.txt') 'new version'
-    Write-Text (Join-Path $source 'orbit-release.json') (@{product='com.creationsoft.orbit';version=$markerVersion;platform='win32';arch='x64'} | ConvertTo-Json -Compress)
+    Write-Text (Join-Path $source 'orbit-release.json') (@{product='com.creationsoft.orbit2';version=$markerVersion;platform='win32';arch='x64'} | ConvertTo-Json -Compress)
     if ($badSmoke) { Write-Text (Join-Path $source 'fail-smoke.txt') 'fail' }
     [void][IO.Directory]::CreateDirectory($work)
-    $archive = Join-Path $work 'Orbit-0.2.0-win32-x64.zip'
+    $archive = Join-Path $work 'Orbit2-0.2.0-win32-x64.zip'
     $zip = [IO.Compression.ZipFile]::Open($archive, [IO.Compression.ZipArchiveMode]::Create)
     try {
         foreach ($file in Get-ChildItem -LiteralPath $source -Recurse -File) {
             $relative = $file.FullName.Substring($source.Length + 1).Replace('\','/')
-            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, ('Orbit-win32-x64/' + $relative))
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $file.FullName, ('Orbit2-win32-x64/' + $relative))
         }
         if ($traversal) {
-            $entry = $zip.CreateEntry('Orbit-win32-x64/../escaped.txt')
+            $entry = $zip.CreateEntry('Orbit2-win32-x64/../escaped.txt')
             $stream = New-Object IO.StreamWriter($entry.Open()); $stream.Write('escape'); $stream.Dispose()
         }
     } finally { $zip.Dispose() }
-    return @{root=$root;install=$install;stage=(Join-Path $root ('.Orbit-update-stage-'+$token));backup=(Join-Path $root ('.Orbit-update-backup-'+$token));work=$work;archive=$archive;sha256=(File-Hash $archive);token=$token}
+    return @{root=$root;install=$install;stage=(Join-Path $root ('.Orbit2-update-stage-'+$token));backup=(Join-Path $root ('.Orbit2-update-backup-'+$token));work=$work;archive=$archive;sha256=(File-Hash $archive);token=$token}
 }
 function Helper-Args($case, [string]$mode, [int]$parentProcess = 0, [int]$nativeProcess = 0, [int]$wait = 3) {
     return @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',$helper,'-Mode',$mode,'-InstallDir',$case.install,'-StagePath',$case.stage,'-BackupPath',$case.backup,'-ArchivePath',$case.archive,'-WorkDir',$case.work,'-ExpectedVersion','0.2.0','-ExpectedSha256',$case.sha256,'-ParentPid',[string]$parentProcess,'-NativePid',[string]$nativeProcess,'-WaitSeconds',[string]$wait)

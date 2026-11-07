@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, screen, Tray, Menu, nativeImage, nativeTheme, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, Tray, Menu, nativeImage, nativeTheme, globalShortcut, clipboard } = require('electron');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -11,7 +11,7 @@ const { findRedirectedCopy } = require('./redirect-check.cjs');
 const SMOKE = process.argv.includes('--smoke-test');
 const E2E = process.argv.includes('--e2e');
 const ISOLATED = SMOKE || E2E;
-// Windows starts Orbit with this flag at sign-in; it then waits in the tray without opening its window.
+// Windows starts Orbit 2 with this flag at sign-in; it then waits in the tray without opening its window.
 const HIDDEN = process.argv.includes('--hidden');
 // Task Scheduler starts Orbit with --elevated-task when "start as administrator" is on (native/AdminTask.cs).
 const ELEVATED_TASK = process.argv.includes('--elevated-task');
@@ -20,18 +20,24 @@ const QUIT = process.argv.includes('--quit');
 // Popular programs added to a brand-new wheel when they are installed.
 const FIRST_RUN_APPS = ['Google Chrome', 'Microsoft Edge', 'Firefox', 'Telegram', 'Visual Studio Code', 'Figma', 'Spotify', 'Discord', 'Notion', 'Slack',
   'Microsoft Word', 'Microsoft Excel', 'Zoom', 'Steam', 'Blender', 'OBS Studio'];
-let firstRun = false, stateRecoveryFile = null, stateRecoveredFromBackup = false, redirectedAppData = null;
+let firstRun = false, stateRecoveryFile = null, stateRecoveredFromBackup = false, redirectedAppData = null, migratedFromLegacy = false;
+// The menu the open wheel shows: the active one, or the menu linked to the program in front.
+let wheelMenuId = null, registeredHotkey = '';
 // The program that was in front when the wheel opened; the wheel's "+" adds it.
 let wheelForeground = null;
 const NATIVE = app.isPackaged && __dirname.includes('app.asar')
-  ? path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'Orbit.Input.exe')
-  : path.join(__dirname, '..', 'native', 'Orbit.Input.exe');
+  ? path.join(process.resourcesPath, 'app.asar.unpacked', 'native', 'Orbit2.Input.exe')
+  : path.join(__dirname, '..', 'native', 'Orbit2.Input.exe');
 const PAGE = path.join(__dirname, 'renderer', 'index.html');
 const APP_ICON = path.join(__dirname, '..', 'assets', 'orbit.ico');
-const { foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, shouldCloseWheelOnClick } = require('./core.cjs');
+const { menuForProgram, foregroundCandidate, droppedAction, validateAction, validateState, parseArguments, wheelGeometry, wheelMountSize, shouldCloseWheelOnClick } = require('./core.cjs');
+const { parseShortcut } = require('./shortcuts.cjs');
+const { createUsage } = require('./usage.cjs');
+const { createBackups } = require('./backups.cjs');
+const { legacyPaths, readLegacyState, isLegacyRunning } = require('./legacy.cjs');
 const { createAppCatalog, validatePackagedTarget, isLocalAppPath } = require('./app-catalog.cjs');
 const { createUpdater } = require('./updater.cjs');
-const UPDATE_REPOSITORY = 'Validolio11/Orbit';
+const UPDATE_REPOSITORY = 'Validolio11/Orbit-2';
 const UPDATE_REPOSITORY_URL = 'https://github.com/' + UPDATE_REPOSITORY;
 let iconWorkers = 0;
 const waitingIcons = [];
@@ -100,8 +106,9 @@ const appCatalog = createAppCatalog({ cachePath: () => path.join(app.getPath('us
 let mainWindow, overlayWindow, tray, state, statePath, quitting = false, hookProcess = null;
 let overlayReady, wheelVisible = false, wheelSession = 0, pendingMouseOpen = false, pendingMouseRelease = null, configQueue = Promise.resolve();
 let appliedWheelSize = 520;
-let updater;
-let runtime = { hookReady: false, outsideWatcherReady: false, hookError: null, shortcutRegistered: false, adminStart: { available: false, enabled: false, elevated: false } };
+let updater, usage, backups;
+let runtime = { hookReady: false, outsideWatcherReady: false, hookError: null, shortcutRegistered: false, hotkey: '', migratedFromLegacy: false, legacyRunning: false,
+  adminStart: { available: false, enabled: false, elevated: false } };
 
 function adobeExecutable(product, executable) {
   for (const root of [process.env.ProgramFiles, process.env['ProgramFiles(x86)']].filter(Boolean)) {
@@ -126,17 +133,27 @@ function defaultState() {
     action('after-effects', 'After Effects', 'app', adobeExecutable('Adobe After Effects', 'AfterFX.exe'), 'after-effects'),
     action('photoshop', 'Photoshop', 'app', adobeExecutable('Adobe Photoshop', 'Photoshop.exe'), 'photoshop'),
   ].filter(item => item.target);
-  return { version: 1, theme: 'dark', triggerButton: 4, activationMode: 'hover', groupOpenMode: 'hover', hoverDelay: 350, enabled: true, reducedMotion: false, closeOnOutsideClick: true, launchAtLogin: true,
+  const keys = (id, name, shortcut, icon) => action(id, name, 'keys', shortcut, icon);
+  return { version: 2, accent: 'blue', hotkey: 'Control+Space', wheelLabels: true, contextMenus: true, autoBackup: true,
+    theme: 'dark', triggerButton: 4, activationMode: 'hover', groupOpenMode: 'hover', hoverDelay: 350, enabled: true, reducedMotion: false, closeOnOutsideClick: true, launchAtLogin: true,
     wheelAddSlot: true, introPending: true, wheelSize: 520,
-    activeMenuId: 'main', menus: [{ id: 'main', name: 'Головне меню', icon: 'orbit', items: [
+    activeMenuId: 'main', menus: [{ id: 'main', name: 'Головне меню', icon: 'orbit', apps: [], items: [
       ...(adobe.length ? [action('adobe', 'Adobe', 'group', '', 'adobe', adobe)] : []),
       action('documents', 'Документи', 'folder', app.getPath('documents'), 'folder'),
       action('browser', 'Вебпошук', 'app', 'https://www.google.com', 'globe'),
       action('explorer', 'Провідник', 'system', 'explorer', 'files'),
       action('screenshot', 'Знімок екрана', 'system', 'screenshot', 'screenshot'),
-      action('task-manager', 'Диспетчер завдань', 'system', 'task-manager', 'activity'),
-      action('mute', 'Вимкнути звук', 'system', 'mute', 'volume'),
-      action('settings', 'Параметри Windows', 'system', 'settings', 'settings'),
+      action('shortcuts', 'Редагування', 'group', '', 'keyboard', [
+        keys('copy', 'Копіювати', 'Ctrl+C', 'copy'), keys('paste', 'Вставити', 'Ctrl+V', 'clipboard'), keys('undo', 'Скасувати', 'Ctrl+Z', 'undo'),
+        keys('redo', 'Повторити', 'Ctrl+Y', 'redo'), keys('select-all', 'Виділити все', 'Ctrl+A', 'select'), keys('save', 'Зберегти', 'Ctrl+S', 'save'),
+      ]),
+      action('system', 'Система', 'group', '', 'windows', [
+        action('task-manager', 'Диспетчер завдань', 'system', 'task-manager', 'activity'),
+        action('mute', 'Вимкнути звук', 'system', 'mute', 'volume'),
+        action('settings', 'Параметри Windows', 'system', 'settings', 'settings'),
+        action('desktop-next', 'Наступний робочий стіл', 'system', 'desktop-next', ''),
+        action('lock', 'Заблокувати', 'system', 'lock', 'lock'),
+      ]),
     ] }] };
 }
 
@@ -147,17 +164,25 @@ async function loadState() {
       // The damaged main file is moved aside so the next save cannot copy it over the good backup.
       const damaged = `${statePath}.bad-${Date.now()}`;
       await fsp.rename(statePath, damaged).catch(() => {});
-      console.warn('Orbit: settings restored from settings.json.bak.');
+      console.warn('Orbit 2: settings restored from settings.json.bak.');
       stateRecoveryFile = damaged; stateRecoveredFromBackup = true;
     }
     return value;
   }
   catch (error) {
-    if (error.code === 'ENOENT') { firstRun = true; return defaultState(); }
+    if (error.code === 'ENOENT') {
+      firstRun = true;
+      // A first start next to the original Orbit brings its menus over instead of starting empty.
+      if (!ISOLATED) {
+        const legacy = await readLegacyState(legacyPaths({ appData: app.getPath('appData'), localAppData: process.env.LOCALAPPDATA }), validateState).catch(() => null);
+        if (legacy) { migratedFromLegacy = true; return { ...legacy, introPending: true }; }
+      }
+      return defaultState();
+    }
     // The broken file is moved aside so the next save cannot overwrite the user's menus.
     const backup = `${statePath}.bad-${Date.now()}`;
     await fsp.rename(statePath, backup).catch(() => {});
-    console.warn('Orbit: configuration could not be loaded; using defaults.', error.message);
+    console.warn('Orbit 2: configuration could not be loaded; using defaults.', error.message);
     stateRecoveryFile = backup;
     return defaultState();
   }
@@ -189,7 +214,7 @@ function updateRuntime(patch) { runtime = { ...runtime, ...patch }; sendAll('orb
 // Keeps the Apps list version current after in-app updates of an installer-made copy.
 function updateUninstallEntry() {
   if (!app.isPackaged || ISOLATED) return;
-  const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Orbit';
+  const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Orbit 2';
   const reg = path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'reg.exe');
   execFile(reg, ['query', key, '/v', 'InstallLocation'], { windowsHide: true }, (error, stdout) => {
     const location = /InstallLocation\s+REG_SZ\s+(.+)/.exec(stdout || '')?.[1]?.trim();
@@ -235,7 +260,7 @@ async function refreshAdminStart() {
   try {
     const status = JSON.parse(result.stdout.trim());
     updateRuntime({ adminStart: { available: status.available === true, enabled: status.enabled === true, elevated: status.elevated === true } });
-  } catch { console.warn('Orbit: could not read the administrator start status.', result.stderr.trim()); }
+  } catch { console.warn('Orbit 2: could not read the administrator start status.', result.stderr.trim()); }
 }
 
 // Restarts Orbit with the new rights: elevated through the task, or unelevated through Explorer.
@@ -269,9 +294,13 @@ async function setAdminStart(enabled) {
 async function persistState(value) {
   const next = validateState(value);
   await fsp.mkdir(path.dirname(statePath), { recursive: true });
+  // The day's first save keeps the configuration as it was before that day's changes.
+  if (next.autoBackup !== false && state) await backups.daily(JSON.stringify(state, null, 2)).catch(error => console.warn('Orbit 2: daily backup failed.', error.message));
   await writeDurable(statePath, JSON.stringify(next, null, 2));
   const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled;
+  const hotkeyChanged = state.hotkey !== next.hotkey;
   state = next;
+  if (hotkeyChanged) registerHotkey();
   nativeTheme.themeSource = state.theme;
   if (!state.enabled) closeWheel();
   applyLoginItem();
@@ -303,7 +332,7 @@ function createWindows() {
   const area = screen.getPrimaryDisplay().workArea;
   mainWindow = new BrowserWindow({ width: Math.min(1260, area.width), height: Math.min(860, area.height),
     minWidth: Math.min(1050, area.width), minHeight: Math.min(720, area.height), show: false, frame: false,
-    title: 'Orbit', icon: APP_ICON, backgroundColor: state.theme === 'light' ? '#fafafa' : '#0a0a0a',
+    title: 'Orbit 2', icon: APP_ICON, backgroundColor: state.theme === 'light' ? '#fafafa' : '#09090b',
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
   overlayWindow = new BrowserWindow({ width: 600, height: 600, show: false, frame: false, transparent: true,
     resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
@@ -321,8 +350,8 @@ function createWindows() {
 }
 
 function reportStartupError(error) {
-  console.error('Orbit startup error:', error);
-  if (!ISOLATED) dialog.showErrorBox('Orbit', `Не вдалося відкрити інтерфейс: ${error.message}`);
+  console.error('Orbit 2 startup error:', error);
+  if (!ISOLATED) dialog.showErrorBox('Orbit 2', `Не вдалося відкрити інтерфейс: ${error.message}`);
 }
 
 async function resolveForeground(exePath, session) {
@@ -346,10 +375,11 @@ function wheelGroup(menu, groupPath) {
   return items;
 }
 
-async function addWheelAction(groupPath) {
+async function addWheelAction(groupPath, menuId) {
   if (!Array.isArray(groupPath) || groupPath.length > 20 || !groupPath.every(id => typeof id === 'string')) throw new Error('Invalid group path.');
   if (!wheelForeground) throw new Error('Не вдалося визначити програму.');
-  const next = structuredClone(state), items = wheelGroup(next.menus.find(menu => menu.id === next.activeMenuId), groupPath);
+  const next = structuredClone(state);
+  const items = wheelGroup(next.menus.find(menu => menu.id === menuId) || next.menus.find(menu => menu.id === next.activeMenuId), groupPath);
   if (items.length >= 12) throw new Error('У цьому колесі вже 12 дій.');
   const action = { id: randomUUID(), name: wheelForeground.name, kind: 'app', target: wheelForeground.target, args: wheelForeground.args || '', icon: 'app', children: [] };
   items.push(action);
@@ -450,7 +480,7 @@ function pythonLauncherPath() {
 async function seedFirstRunApps() {
   const snapshot = JSON.stringify(state);
   const found = await appCatalog.findNamed(FIRST_RUN_APPS).catch(() => []);
-  if (!found.length || JSON.stringify(state) !== snapshot) return;
+  if (!found.length || JSON.stringify(state) !== snapshot || migratedFromLegacy) return;
   const next = structuredClone(state), items = next.menus[0].items;
   // Leave one free slot so the wheel's "+" stays available.
   for (const entry of found.slice(0, Math.max(0, 11 - items.length)).reverse()) {
@@ -459,10 +489,12 @@ async function seedFirstRunApps() {
   if (JSON.stringify(state) === snapshot) await saveState(next).catch(() => {});
 }
 
-async function showWheel(physicalPoint, trigger = 'preview') {
+async function showWheel(physicalPoint, trigger = 'preview', foregroundPath = '') {
   if (!overlayWindow || overlayWindow.isDestroyed()) return { ok: false, error: 'Wheel unavailable.' };
   const session = ++wheelSession;
   wheelForeground = null;
+  const context = trigger === 'preview' ? null : menuForProgram(state, foregroundPath);
+  wheelMenuId = context?.id || state.activeMenuId;
   if (trigger !== 'preview' && state.introPending) patchState({ introPending: false }).catch(() => {});
   pendingMouseOpen = trigger === 'mouse';
   pendingMouseRelease = null;
@@ -477,7 +509,7 @@ async function showWheel(physicalPoint, trigger = 'preview') {
   const center = { x: appliedBounds.width / 2, y: appliedBounds.height / 2 };
   appliedWheelSize = wheelMountSize(appliedBounds, requestedWheelSize);
   wheelVisible = true;
-  overlayWindow.webContents.send('orbit:wheel-open', { center, trigger, size: appliedWheelSize });
+  overlayWindow.webContents.send('orbit:wheel-open', { center, trigger, size: appliedWheelSize, menuId: wheelMenuId, context: !!context });
   if (trigger === 'mouse') overlayWindow.showInactive();
   else overlayWindow.show();
   // A window pinned on top (e.g. PowerToys Always On Top) and activated later sits above the
@@ -517,10 +549,15 @@ function startHook() {
       if (hookProcess !== child) continue;
       if (event.type === 'ready') updateRuntime({ hookReady: state.enabled && event.button === state.triggerButton, outsideWatcherReady: true, hookError: null });
       else if (event.type === 'down' && state.enabled) {
-        showWheel({ x: event.x, y: event.y }, 'mouse').catch(error => updateRuntime({ hookError: error.message }));
+        showWheel({ x: event.x, y: event.y }, 'mouse', event.foreground).catch(error => updateRuntime({ hookError: error.message }));
         resolveForeground(event.foreground, wheelSession).catch(() => {});
       }
-      else if (event.type === 'foreground' && wheelVisible) resolveForeground(event.path, wheelSession).catch(() => {});
+      else if (event.type === 'foreground' && wheelVisible) {
+        // The keyboard-opened wheel learns the program in front only now; switch to its linked menu.
+        const context = menuForProgram(state, event.path);
+        if (context && context.id !== wheelMenuId) { wheelMenuId = context.id; overlayWindow.webContents.send('orbit:wheel-menu', { menuId: context.id, context: true }); }
+        resolveForeground(event.path, wheelSession).catch(() => {});
+      }
       else if (event.type === 'click' && wheelVisible && state.closeOnOutsideClick && overlayWindow && !overlayWindow.isDestroyed()) {
         if (Number.isFinite(event.x) && Number.isFinite(event.y)) {
           const point = screen.screenToDipPoint({ x: event.x, y: event.y });
@@ -568,9 +605,10 @@ const SYSTEM_PROGRAMS = {
 };
 const SYSTEM_SETTINGS = { settings: 'ms-settings:', 'sound-settings': 'ms-settings:sound', bluetooth: 'ms-settings:bluetooth' };
 
-function nativeAction(target) {
+function nativeAction(target) { return runNative(`--action=${target}`); }
+function runNative(argument) {
   return new Promise((resolve, reject) => {
-    const child = spawn(NATIVE, [`--action=${target}`], { windowsHide: true, stdio: 'ignore' });
+    const child = spawn(NATIVE, [argument], { windowsHide: true, stdio: 'ignore' });
     child.once('error', reject);
     child.once('exit', code => code === 0 ? resolve() : reject(new Error(`Windows не виконав дію (${code}).`)));
   });
@@ -592,6 +630,13 @@ async function executeAction(input) {
       else if (SYSTEM_SETTINGS[action.target]) await shell.openExternal(SYSTEM_SETTINGS[action.target]);
       // Keyboard shortcuts go through the native helper after the wheel has released focus.
       else { await new Promise(resolve => setTimeout(resolve, 100)); await nativeAction(action.target); }
+    } else if (action.kind === 'keys') {
+      const { keys } = parseShortcut(action.target);
+      // The keys go to the program in front once the wheel has released focus.
+      await new Promise(resolve => setTimeout(resolve, 120));
+      await runNative(`--keys=${keys.join(',')}`);
+    } else if (action.kind === 'text') {
+      await pasteText(action.target);
     } else if (action.kind === 'app' && action.target.startsWith('app-id:')) {
       const appId = validatePackagedTarget(action.target, action.args);
       await startProcess(path.join(process.env.WINDIR || 'C:\\Windows', 'explorer.exe'), ['shell:AppsFolder\\' + appId]);
@@ -623,6 +668,7 @@ async function executeAction(input) {
         const error = await shell.openPath(action.target); if (error) throw new Error(error);
       } else throw new Error('Для застосунку виберіть файл .exe або .lnk.');
     }
+    usage?.record(action.id).catch(() => {});
     return { ok: true };
   } catch (error) {
     if (executing) {
@@ -631,6 +677,47 @@ async function executeAction(input) {
     }
     return { ok: false, error: error.message };
   }
+}
+
+// Text snippets are pasted through the clipboard; plain-text clipboard contents are put back afterwards.
+async function pasteText(text) {
+  const formats = clipboard.availableFormats();
+  const previous = formats.length && formats.every(format => format.startsWith('text/')) ? clipboard.readText() : null;
+  clipboard.writeText(text);
+  await new Promise(resolve => setTimeout(resolve, 120));
+  await runNative('--keys=17,86');
+  if (previous !== null) setTimeout(() => { if (clipboard.readText() === text) clipboard.writeText(previous); }, 900);
+}
+
+function onHotkey() {
+  if (wheelVisible) { closeWheel(); return; }
+  // Ask the hook which program is in front before the keyboard-opened wheel takes focus.
+  try { hookProcess?.stdin.write('foreground\n'); } catch { }
+  showWheel(undefined, 'keyboard').catch(console.error);
+}
+
+function registerHotkey() {
+  if (ISOLATED) return;
+  const wanted = state.hotkey ?? 'Control+Space';
+  if (registeredHotkey) { globalShortcut.unregister(registeredHotkey); registeredHotkey = ''; }
+  let registered = false;
+  if (wanted) { try { registered = globalShortcut.register(wanted, onHotkey); } catch { registered = false; } }
+  if (registered) registeredHotkey = wanted;
+  updateRuntime({ shortcutRegistered: registered, hotkey: wanted });
+}
+
+async function refreshLegacy() {
+  if (ISOLATED || process.platform !== 'win32') return;
+  updateRuntime({ legacyRunning: await isLegacyRunning() });
+}
+
+async function quitLegacy() {
+  const { executable } = legacyPaths({ appData: app.getPath('appData'), localAppData: process.env.LOCALAPPDATA });
+  if (!executable || !fs.existsSync(executable)) return { ok: false, error: 'Не знайдено встановлений Orbit. Закрийте його через іконку біля годинника.' };
+  await startProcess(executable, ['--quit'], { detached: true }).catch(() => {});
+  for (let attempt = 0; attempt < 20 && await isLegacyRunning(); attempt++) await new Promise(resolve => setTimeout(resolve, 500));
+  await refreshLegacy();
+  return runtime.legacyRunning ? { ok: false, error: 'Orbit не закрився. Закрийте його через іконку біля годинника.' } : { ok: true };
 }
 
 function requireSender(event) {
@@ -665,12 +752,30 @@ function registerIPC() {
   handle('orbit:minimize', () => mainWindow.minimize());
   handle('orbit:maximize', () => mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize());
   handle('orbit:close-window', () => mainWindow.close());
-  handle('orbit:add-wheel-action', addWheelAction);
+  handle('orbit:add-wheel-action', (groupPath, menuId) => addWheelAction(groupPath, typeof menuId === 'string' ? menuId : null));
+  handle('orbit:get-usage', () => usage.get());
+  handle('orbit:reset-usage', () => usage.reset());
+  handle('orbit:list-backups', () => backups.list());
+  handle('orbit:create-backup', async () => { await configQueue; return backups.manual(JSON.stringify(state, null, 2)); });
+  handle('orbit:restore-backup', async name => {
+    const text = await backups.read(name);
+    // The configuration being replaced is kept too, so a restore can itself be undone.
+    await backups.manual(JSON.stringify(state, null, 2));
+    return saveState(JSON.parse(text));
+  });
+  handle('orbit:quit-legacy', quitLegacy);
+  handle('orbit:pick-program', async () => {
+    const result = await dialog.showOpenDialog(mainWindow, { title: 'Виберіть програму', properties: ['openFile'], filters: [{ name: 'Програми Windows', extensions: ['exe', 'lnk'] }] });
+    if (result.canceled || !result.filePaths[0]) return null;
+    let file = result.filePaths[0];
+    if (/\.lnk$/i.test(file)) { try { file = shell.readShortcutLink(file).target || file; } catch { } }
+    return /\.exe$/i.test(file) ? path.basename(file).toLowerCase() : null;
+  });
   handle('orbit:list-folders', listFolders);
   handle('orbit:list-scripts', listScripts);
-  handle('orbit:open-add-dialog', groupPath => {
+  handle('orbit:open-add-dialog', (groupPath, menuId) => {
     if (!Array.isArray(groupPath) || !groupPath.every(id => typeof id === 'string')) throw new Error('Invalid group path.');
-    closeWheel(); showMain({ page: 'menus', groupPath, add: true });
+    closeWheel(); showMain({ page: 'menus', groupPath, add: true, menuId: typeof menuId === 'string' ? menuId : null });
   });
   handle('orbit:inspect-dropped', async paths => {
     if (!Array.isArray(paths) || paths.length > 50) throw new Error('Invalid dropped files.');
@@ -692,13 +797,13 @@ function registerIPC() {
   });
   handle('orbit:export-state', async () => {
     try {
-      const result = await dialog.showSaveDialog(mainWindow, { title: 'Експортувати налаштування Orbit', defaultPath: 'orbit-settings.json', filters: [{ name: 'Orbit JSON', extensions: ['json'] }] });
+      const result = await dialog.showSaveDialog(mainWindow, { title: 'Експортувати налаштування Orbit 2', defaultPath: 'orbit2-settings.json', filters: [{ name: 'Orbit JSON', extensions: ['json'] }] });
       if (result.canceled || !result.filePath) return { ok: false, canceled: true };
       await fsp.writeFile(result.filePath, JSON.stringify(state, null, 2), 'utf8'); return { ok: true };
     } catch (error) { return { ok: false, error: error.message }; }
   });
   handle('orbit:import-state', async () => {
-    const result = await dialog.showOpenDialog(mainWindow, { title: 'Імпортувати налаштування Orbit', properties: ['openFile'], filters: [{ name: 'Orbit JSON', extensions: ['json'] }] });
+    const result = await dialog.showOpenDialog(mainWindow, { title: 'Імпортувати налаштування Orbit або Orbit 2', properties: ['openFile'], filters: [{ name: 'Orbit JSON', extensions: ['json'] }] });
     if (result.canceled || !result.filePaths[0]) return null;
     const stat = await fsp.stat(result.filePaths[0]);
     if (stat.size > 1024 * 1024) throw new Error('Файл налаштувань завеликий.');
@@ -715,15 +820,16 @@ function showMain(page) {
 
 function updateTray() {
   if (!tray) return;
-  tray.setToolTip(`Orbit · ${state.enabled ? 'Увімкнено' : 'Призупинено'}`);
+  tray.setToolTip(`Orbit 2 · ${state.enabled ? 'Увімкнено' : 'Призупинено'}`);
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Відкрити Orbit', click: () => showMain() },
+    { label: 'Відкрити Orbit 2', click: () => showMain() },
+    { label: 'Огляд і статистика', click: () => showMain('overview') },
     { label: 'Показати колесо', click: () => showWheel().catch(console.error) },
     { label: 'Додати дію…', click: () => showMain({ page: 'menus', groupPath: [], add: true }) },
     ...(state.menus.length > 1 ? [{ label: 'Меню на колесі', submenu: state.menus.map(menu => ({ label: menu.name, type: 'radio', checked: menu.id === state.activeMenuId,
       click: () => patchState({ activeMenuId: menu.id }).catch(error => { console.error(error); updateTray(); }) })) }] : []),
     { label: 'Увімкнено', type: 'checkbox', checked: state.enabled, click: item => patchState({ enabled: item.checked }).catch(error => { console.error(error); updateTray(); }) },
-    { type: 'separator' }, { label: 'Вийти з Orbit', click: () => app.quit() },
+    { type: 'separator' }, { label: 'Вийти з Orbit 2', click: () => app.quit() },
   ]));
 }
 
@@ -753,15 +859,15 @@ async function smokeTest() {
   });
   const result = { ok: probe.bridge && overlay.bridge && native.ok && iconLoaded, main: probe, overlay, native, iconLoaded, menus: state.menus.length, actions: state.menus[0].items.length };
   console.log('ORBIT_SMOKE ' + JSON.stringify(result));
-  if (!result.ok) throw new Error('Orbit smoke-test validation failed.');
+  if (!result.ok) throw new Error('Orbit 2 smoke-test validation failed.');
 }
 
-app.setName('Orbit');
-if (process.platform === 'win32') app.setAppUserModelId('com.creationsoft.orbit');
-if (!ISOLATED) app.setPath('userData', path.join(app.getPath('appData'), 'Orbit'));
+app.setName('Orbit 2');
+if (process.platform === 'win32') app.setAppUserModelId('com.creationsoft.orbit2');
+if (!ISOLATED) app.setPath('userData', path.join(app.getPath('appData'), 'Orbit 2'));
 if (!ISOLATED && (handOverToAdminTask() || !app.requestSingleInstanceLock() || QUIT)) app.quit();
 else {
-  if (ISOLATED) app.setPath('userData', path.join(os.tmpdir(), `orbit-${SMOKE ? 'smoke' : 'e2e'}-${process.pid}`));
+  if (ISOLATED) app.setPath('userData', path.join(os.tmpdir(), `orbit2-${SMOKE ? 'smoke' : 'e2e'}-${process.pid}`));
   app.on('second-instance', (_event, argv) => {
     if (argv.includes('--quit')) app.quit();
     else if (!argv.includes('--hidden')) showMain();
@@ -772,12 +878,15 @@ else {
     if (quitting) return;
     event.preventDefault(); quitting = true; closeWheel(); globalShortcut.unregisterAll();
     appCatalog.dispose();
-    Promise.all([configQueue, stopHook(), updater?.dispose()]).finally(() => { if (tray) { tray.destroy(); tray = null; } app.quit(); });
+    Promise.all([configQueue, stopHook(), updater?.dispose(), usage?.dispose()]).finally(() => { if (tray) { tray.destroy(); tray = null; } app.quit(); });
   });
   app.whenReady().then(async () => {
     if (app.isPackaged && !ISOLATED && await leaveRedirectedAppData()) return;
     statePath = path.join(app.getPath('userData'), 'settings.json');
+    backups = createBackups({ dir: path.join(app.getPath('userData'), 'backups') });
+    usage = createUsage({ file: path.join(app.getPath('userData'), 'usage.json'), onChange: value => sendAll('orbit:usage-changed', value) });
     state = await loadState(); nativeTheme.themeSource = state.theme;
+    if (migratedFromLegacy) { runtime.migratedFromLegacy = true; await saveState(state).catch(error => console.warn('Orbit 2: imported menus not saved.', error.message)); }
     applyLoginItem(); updateUninstallEntry();
     updater = createUpdater({
       version: app.getVersion(), repo: UPDATE_REPOSITORY,
@@ -793,25 +902,21 @@ else {
     registerIPC(); await createWindows();
     refreshAdminStart().catch(() => {});
     if (stateRecoveryFile && !ISOLATED) dialog.showMessageBox(mainWindow, stateRecoveredFromBackup
-      ? { type: 'info', title: 'Orbit', message: 'Налаштування Orbit відновлено з резервної копії.', detail: `Основний файл був пошкоджений, тож останні зміни перед цим могли не зберегтися. Пошкоджений файл збережено як:\n${stateRecoveryFile}` }
-      : { type: 'warning', title: 'Orbit', message: 'Не вдалося прочитати налаштування Orbit.', detail: `Меню скинуто до початкових. Попередній файл збережено як:\n${stateRecoveryFile}` }).catch(() => {});
-    if (redirectedAppData) dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Orbit', message: 'Зміни в цьому вікні Orbit можуть не зберегтися.',
+      ? { type: 'info', title: 'Orbit 2', message: 'Налаштування Orbit 2 відновлено з резервної копії.', detail: `Основний файл був пошкоджений, тож останні зміни перед цим могли не зберегтися. Пошкоджений файл збережено як:\n${stateRecoveryFile}` }
+      : { type: 'warning', title: 'Orbit 2', message: 'Не вдалося прочитати налаштування Orbit 2.', detail: `Меню скинуто до початкових. Попередній файл збережено як:\n${stateRecoveryFile}` }).catch(() => {});
+    if (redirectedAppData) dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Orbit 2', message: 'Зміни в цьому вікні Orbit 2 можуть не зберегтися.',
       detail: `Orbit запущено з іншої програми, і Windows записує його налаштування в її окрему копію:\n${redirectedAppData}\n\nЗакрийте Orbit і запустіть його з меню «Пуск».` }).catch(() => {});
     if (!ISOLATED) logStartup().catch(() => {});
     // An install that failed after Orbit closed is reported once, before cleanup removes its files.
-    if (app.isPackaged && !ISOLATED) updater.reportFailedInstall().catch(error => console.warn('Orbit: could not read the last update result.', error));
+    if (app.isPackaged && !ISOLATED) updater.reportFailedInstall().catch(error => console.warn('Orbit 2: could not read the last update result.', error));
     if (SMOKE) { await smokeTest(); app.quit(); return; }
     appCatalog.warm();
-    if (E2E) { globalThis.__orbitE2E = { resolveForeground: exePath => resolveForeground(exePath, wheelSession), showWheel: point => showWheel(point, 'mouse') }; return; }
+    if (E2E) { globalThis.__orbitE2E = { resolveForeground: exePath => resolveForeground(exePath, wheelSession), showWheel: (point, foreground = '') => showWheel(point, 'mouse', foreground), recordUsage: id => usage.record(id) }; return; }
     createTray();
     if (firstRun) seedFirstRunApps().catch(() => {});
-    updateRuntime({ shortcutRegistered: globalShortcut.register('Control+Space', () => {
-      if (wheelVisible) { closeWheel(); return; }
-      // Ask the hook which program is in front before the keyboard-opened wheel takes focus.
-      try { hookProcess?.stdin.write('foreground\n'); } catch { }
-      showWheel(undefined, 'keyboard').catch(console.error);
-    }) });
+    registerHotkey();
     startHook();
+    refreshLegacy().catch(() => {});
     // Wait until a just-finished update helper has exited before removing its files.
     if (app.isPackaged) setTimeout(() => updater.cleanup().catch(() => {}), 30000);
   }).catch(async error => { console.error(error); quitting = true; appCatalog.dispose(); await stopHook(); globalShortcut.unregisterAll(); if (tray) tray.destroy(); app.exit(1); });

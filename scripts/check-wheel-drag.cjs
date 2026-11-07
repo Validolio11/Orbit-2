@@ -5,7 +5,7 @@ const fs=require('node:fs/promises');
 
 (async()=>{
   const project=path.resolve(__dirname,'..'),packaged=process.argv.includes('--packaged');
-  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist/Orbit-win32-x64/Orbit.exe'):require('electron'),cwd:project});
+  const app=await _electron.launch({args:packaged?['--e2e']:[project,'--e2e'],executablePath:packaged?path.join(project,'dist/Orbit2-win32-x64/Orbit2.exe'):require('electron'),cwd:project});
   let pointerDown=false;
   try{
     await app.firstWindow();let page;
