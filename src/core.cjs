@@ -50,7 +50,7 @@ function validateState(value) {
   if (value.version !== 1 && value.version !== 2) throw new Error('Unsupported configuration version.');
   if (value.accent !== undefined && !ACCENTS.includes(value.accent)) throw new Error('Invalid accent color.');
   if (value.hotkey !== undefined && !HOTKEYS.includes(value.hotkey)) throw new Error('Invalid keyboard shortcut.');
-  for (const key of ['wheelLabels', 'contextMenus', 'autoBackup']) if (value[key] !== undefined && typeof value[key] !== 'boolean') throw new Error(`Invalid ${key} preference.`);
+  for (const key of ['wheelLabels', 'contextMenus', 'autoBackup', 'gameMode']) if (value[key] !== undefined && typeof value[key] !== 'boolean') throw new Error(`Invalid ${key} preference.`);
   if (!['dark', 'light', 'system'].includes(value.theme)) throw new Error('Invalid theme.');
   if (![4, 5].includes(value.triggerButton)) throw new Error('Choose mouse button 4 or 5.');
   if (!['release', 'hover', 'click'].includes(value.activationMode)) throw new Error('Invalid activation mode.');
@@ -80,7 +80,7 @@ function validateState(value) {
   });
   if (!menus.some(menu => menu.id === value.activeMenuId)) throw new Error('The active menu does not exist.');
   return { version: 2, accent: value.accent ?? 'blue', hotkey: value.hotkey ?? 'Control+Space', wheelLabels: value.wheelLabels ?? true,
-    contextMenus: value.contextMenus ?? true, autoBackup: value.autoBackup ?? true, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
+    contextMenus: value.contextMenus ?? true, autoBackup: value.autoBackup ?? true, gameMode: value.gameMode ?? true, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
     hoverDelay: value.hoverDelay, enabled: value.enabled, reducedMotion: value.reducedMotion, closeOnOutsideClick: value.closeOnOutsideClick ?? true, launchAtLogin: value.launchAtLogin ?? true,
     wheelAddSlot: value.wheelAddSlot ?? true, introPending: value.introPending ?? false, wheelSize: value.wheelSize ?? 520, menus, activeMenuId: value.activeMenuId };
 }

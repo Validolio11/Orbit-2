@@ -16,6 +16,10 @@ internal static class MouseHook
     private static IntPtr Hook = IntPtr.Zero;
     private static uint MainThread;
     private static int SelectedButton = 4;
+    // Game mode: over a fullscreen program the side button belongs to that program, not to Orbit 2.
+    private static bool GameMode = false;
+    private static bool PassedThrough = false;
+    private static Func<bool> ForegroundFullscreen = IsForegroundFullscreen;
 
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int x, y; }
     [StructLayout(LayoutKind.Sequential)] private struct MSLLHOOKSTRUCT { public POINT pt; public uint mouseData, flags, time; public UIntPtr extra; }
@@ -25,6 +29,8 @@ internal static class MouseHook
     [StructLayout(LayoutKind.Sequential)] private struct MOUSEINPUT { public int dx, dy; public uint mouseData, flags, time; public UIntPtr extra; }
     [StructLayout(LayoutKind.Sequential)] private struct KEYBDINPUT { public ushort key, scan; public uint flags, time; public UIntPtr extra; }
     [StructLayout(LayoutKind.Sequential)] private struct SIZE { public int width, height; }
+    [StructLayout(LayoutKind.Sequential)] private struct RECT { public int left, top, right, bottom; }
+    [StructLayout(LayoutKind.Sequential)] private struct MONITORINFO { public int size; public RECT monitor, work; public uint flags; }
     [StructLayout(LayoutKind.Sequential)] private struct BITMAP { public int type, width, height, widthBytes; public ushort planes, bitsPixel; public IntPtr bits; }
     [StructLayout(LayoutKind.Sequential)] private struct BITMAPINFOHEADER { public uint size; public int width, height; public ushort planes, bitCount; public uint compression, sizeImage; public int xPixelsPerMeter, yPixelsPerMeter; public uint colorsUsed, colorsImportant; }
     [StructLayout(LayoutKind.Sequential)] private struct BITMAPINFO { public BITMAPINFOHEADER header; public uint color; }
@@ -40,6 +46,11 @@ internal static class MouseHook
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, INPUT[] inputs, int size);
     [DllImport("user32.dll")] private static extern bool LockWorkStation();
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr window, out RECT rect);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr window, uint flags);
+    [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr window, StringBuilder name, int size);
+    [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint id);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
@@ -68,6 +79,7 @@ internal static class MouseHook
         {
             if (arg.StartsWith("--button=") && !int.TryParse(arg.Substring(9), out SelectedButton)) return 2;
             if (arg.StartsWith("--parent-pid=")) int.TryParse(arg.Substring(13), out parentId);
+            if (arg == "--game-mode=1") GameMode = true;
         }
         if (SelectedButton != 0 && SelectedButton != 4 && SelectedButton != 5) return 2;
         try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch (EntryPointNotFoundException) { }
@@ -123,6 +135,9 @@ internal static class MouseHook
             int button = (int)((mouse.mouseData >> 16) & 0xffff) + 3;
             if (button == SelectedButton)
             {
+                // A press that started over a fullscreen program passes through together with its release.
+                if (kind == WM_XBUTTONDOWN) PassedThrough = GameMode && ForegroundFullscreen();
+                if (PassedThrough) { if (kind == WM_XBUTTONUP) PassedThrough = false; return false; }
                 // The program in front is read here, before the wheel can take focus.
                 string foreground = kind == WM_XBUTTONDOWN ? ",\"foreground\":\"" + ForegroundMarker() + "\"" : "";
                 Enqueue("{\"type\":\"" + (kind == WM_XBUTTONDOWN ? "down" : "up") + "\",\"x\":" + mouse.pt.x + ",\"y\":" + mouse.pt.y + ",\"button\":" + button + foreground + "}");
@@ -130,6 +145,22 @@ internal static class MouseHook
             }
         }
         return false;
+    }
+
+    // Only cheap user32 calls: this runs inside the low-level hook callback.
+    private static bool IsForegroundFullscreen()
+    {
+        IntPtr window = GetForegroundWindow();
+        if (window == IntPtr.Zero || window == GetShellWindow()) return false;
+        var name = new StringBuilder(64);
+        GetClassName(window, name, name.Capacity);
+        string kind = name.ToString();
+        if (kind == "Progman" || kind == "WorkerW" || kind == "Shell_TrayWnd") return false;
+        RECT rect;
+        if (!GetWindowRect(window, out rect)) return false;
+        var info = new MONITORINFO { size = Marshal.SizeOf(typeof(MONITORINFO)) };
+        if (!GetMonitorInfo(MonitorFromWindow(window, 2), ref info)) return false;
+        return rect.left <= info.monitor.left && rect.top <= info.monitor.top && rect.right >= info.monitor.right && rect.bottom >= info.monitor.bottom;
     }
 
     private static int RunSelfTest()
@@ -154,6 +185,15 @@ internal static class MouseHook
             passed &= !InspectMouse(WM_XBUTTONDOWN, mouse);
             SelectedButton = 0;
         }
+        // Game mode: both the press and its release reach a fullscreen program; elsewhere Orbit 2 still takes them.
+        GameMode = true; SelectedButton = 4; mouse.mouseData = 1u << 16;
+        ForegroundFullscreen = delegate { return true; };
+        passed &= !InspectMouse(WM_XBUTTONDOWN, mouse);
+        ForegroundFullscreen = delegate { return false; };
+        passed &= !InspectMouse(WM_XBUTTONUP, mouse);
+        passed &= InspectMouse(WM_XBUTTONDOWN, mouse);
+        passed &= InspectMouse(WM_XBUTTONUP, mouse);
+        GameMode = false; SelectedButton = 0; ForegroundFullscreen = IsForegroundFullscreen;
         string value;
         int events = 0, normalClicks = 0;
         bool left = false, right = false, middle = false;
@@ -168,9 +208,9 @@ internal static class MouseHook
                 middle |= value.Contains("\"button\":\"middle\"");
             }
         }
-        passed &= events == 7 && normalClicks == 3 && left && right && middle;
+        passed &= events == 9 && normalClicks == 3 && left && right && middle;
         if (!passed) { Console.Error.WriteLine("Mouse event self-test failed."); return 5; }
-        Console.WriteLine("{\"ok\":true,\"architecture\":\"x64\",\"buttons\":[4,5],\"outsideWatcher\":true,\"normalClicksPassThrough\":true,\"watcherPassesSideButtons\":true}");
+        Console.WriteLine("{\"ok\":true,\"architecture\":\"x64\",\"buttons\":[4,5],\"outsideWatcher\":true,\"normalClicksPassThrough\":true,\"watcherPassesSideButtons\":true,\"gameModePassesThrough\":true}");
         return 0;
     }
 

@@ -141,3 +141,9 @@ test('groups are either nested wheels or sequences, and menu shortcuts are disti
   for (const hotkeys of [['Control+Alt+1', 'Control+Alt+1'], ['Control+Alt+0', ''], ['Control+Space', '']])
     assert.throws(() => validateState({ ...config, menus: config.menus.map((menu, index) => ({ ...menu, hotkey: hotkeys[index] })) }), /Menu shortcuts/);
 });
+
+test('game mode defaults on for Orbit settings and keeps an explicit opt-out', () => {
+  assert.equal(validateState(legacyConfig()).gameMode, true);
+  assert.equal(validateState({ ...legacyConfig(), gameMode: false }).gameMode, false);
+  assert.throws(() => validateState({ ...legacyConfig(), gameMode: 'on' }), /gameMode/);
+});

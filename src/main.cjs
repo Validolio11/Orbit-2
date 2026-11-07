@@ -134,7 +134,7 @@ function defaultState() {
     action('photoshop', 'Photoshop', 'app', adobeExecutable('Adobe Photoshop', 'Photoshop.exe'), 'photoshop'),
   ].filter(item => item.target);
   const keys = (id, name, shortcut, icon) => action(id, name, 'keys', shortcut, icon);
-  return { version: 2, accent: 'blue', hotkey: 'Control+Space', wheelLabels: true, contextMenus: true, autoBackup: true,
+  return { version: 2, accent: 'blue', hotkey: 'Control+Space', wheelLabels: true, contextMenus: true, autoBackup: true, gameMode: true,
     theme: 'dark', triggerButton: 4, activationMode: 'hover', groupOpenMode: 'hover', hoverDelay: 350, enabled: true, reducedMotion: false, closeOnOutsideClick: true, launchAtLogin: true,
     wheelAddSlot: true, introPending: true, wheelSize: 520,
     activeMenuId: 'main', menus: [{ id: 'main', name: 'Головне меню', icon: 'orbit', apps: [], items: [
@@ -297,7 +297,7 @@ async function persistState(value) {
   // The day's first save keeps the configuration as it was before that day's changes.
   if (next.autoBackup !== false && state) await backups.daily(JSON.stringify(state, null, 2)).catch(error => console.warn('Orbit 2: daily backup failed.', error.message));
   await writeDurable(statePath, JSON.stringify(next, null, 2));
-  const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled;
+  const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled || state.gameMode !== next.gameMode;
   const menuKeys = value => value.menus.map(menu => `${menu.id}=${menu.hotkey || ''}`).join();
   const hotkeyChanged = state.hotkey !== next.hotkey || menuKeys(state) !== menuKeys(next);
   state = next;
@@ -538,7 +538,7 @@ function closeWheel() {
 function startHook() {
   if (quitting || ISOLATED || hookProcess) return;
   if (!fs.existsSync(NATIVE)) { updateRuntime({ hookReady: false, hookError: 'Модуль миші не зібрано. Виконайте npm run native.' }); return; }
-  const child = spawn(NATIVE, [`--button=${state.enabled ? state.triggerButton : 0}`, `--parent-pid=${process.pid}`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(NATIVE, [`--button=${state.enabled ? state.triggerButton : 0}`, `--parent-pid=${process.pid}`, `--game-mode=${state.gameMode !== false ? 1 : 0}`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   hookProcess = child;
   let buffer = '', errorText = '';
   child.stdout.setEncoding('utf8');

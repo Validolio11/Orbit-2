@@ -35,5 +35,6 @@ if ($LASTEXITCODE -ne 0) { throw 'Native self-test failed.' }
 Test-NativeLifecycle '--button=4' $true
 Test-NativeLifecycle '--button=5' $true
 Test-NativeLifecycle '--button=0' $true
+Test-NativeLifecycle '--button=4 --game-mode=1' $true
 Test-NativeLifecycle '--button=4 --parent-pid=2147483647' $false
 Test-NativeLifecycle '--button=0 --parent-pid=2147483647' $false
