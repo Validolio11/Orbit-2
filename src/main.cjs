@@ -23,6 +23,8 @@ const FIRST_RUN_APPS = ['Google Chrome', 'Microsoft Edge', 'Firefox', 'Telegram'
 let firstRun = false, stateRecoveryFile = null, stateRecoveredFromBackup = false, redirectedAppData = null, migratedFromLegacy = false;
 // The menu the open wheel shows: the active one, or the menu linked to the program in front.
 let wheelMenuId = null, wheelMenuForced = false, registeredHotkey = '', registeredMenuHotkeys = [], usageSnapshot = null, trayTimer = null;
+// Keyboard shortcuts step aside while a fullscreen game (game mode) or an excluded program is in front.
+let hotkeysPaused = false, focusInfo = { fullscreen: false, excluded: false };
 // The program that was in front when the wheel opened; the wheel's "+" adds it.
 let wheelForeground = null;
 const NATIVE = app.isPackaged && __dirname.includes('app.asar')
@@ -107,7 +109,7 @@ let mainWindow, overlayWindow, tray, state, statePath, quitting = false, hookPro
 let overlayReady, wheelVisible = false, wheelSession = 0, pendingMouseOpen = false, pendingMouseRelease = null, configQueue = Promise.resolve();
 let appliedWheelSize = 520;
 let updater, usage, backups;
-let runtime = { hookReady: false, outsideWatcherReady: false, hookError: null, shortcutRegistered: false, hotkey: '', migratedFromLegacy: false, legacyRunning: false,
+let runtime = { hookReady: false, outsideWatcherReady: false, hookError: null, shortcutRegistered: false, hotkey: '', migratedFromLegacy: false, legacyRunning: false, hotkeysPaused: false,
   adminStart: { available: false, enabled: false, elevated: false } };
 
 function adobeExecutable(product, executable) {
@@ -297,11 +299,13 @@ async function persistState(value) {
   // The day's first save keeps the configuration as it was before that day's changes.
   if (next.autoBackup !== false && state) await backups.daily(JSON.stringify(state, null, 2)).catch(error => console.warn('Orbit 2: daily backup failed.', error.message));
   await writeDurable(statePath, JSON.stringify(next, null, 2));
-  const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled || state.gameMode !== next.gameMode;
+  const hookChanged = state.triggerButton !== next.triggerButton || state.enabled !== next.enabled || state.gameMode !== next.gameMode || (state.excludedApps || []).join('|') !== (next.excludedApps || []).join('|');
   const menuKeys = value => value.menus.map(menu => `${menu.id}=${menu.hotkey || ''}`).join();
   const hotkeyChanged = state.hotkey !== next.hotkey || menuKeys(state) !== menuKeys(next);
+  const previousGameMode = state.gameMode;
   state = next;
   if (hotkeyChanged) registerHotkey();
+  else if (state.gameMode !== previousGameMode) updateHotkeyPause();
   nativeTheme.themeSource = state.theme;
   if (!state.enabled) closeWheel();
   applyLoginItem();
@@ -538,7 +542,7 @@ function closeWheel() {
 function startHook() {
   if (quitting || ISOLATED || hookProcess) return;
   if (!fs.existsSync(NATIVE)) { updateRuntime({ hookReady: false, hookError: 'Модуль миші не зібрано. Виконайте npm run native.' }); return; }
-  const child = spawn(NATIVE, [`--button=${state.enabled ? state.triggerButton : 0}`, `--parent-pid=${process.pid}`, `--game-mode=${state.gameMode !== false ? 1 : 0}`], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(NATIVE, [`--button=${state.enabled ? state.triggerButton : 0}`, `--parent-pid=${process.pid}`, `--game-mode=${state.gameMode !== false ? 1 : 0}`, ...(state.excludedApps?.length ? [`--exclude=${state.excludedApps.join('|')}`] : [])], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
   hookProcess = child;
   let buffer = '', errorText = '';
   child.stdout.setEncoding('utf8');
@@ -567,6 +571,10 @@ function startHook() {
           if (shouldCloseWheelOnClick({ ...event, ...point }, wheelVisible, state.closeOnOutsideClick, overlayWindow.getBounds(), appliedWheelSize)) closeWheel();
         }
       }
+      else if (event.type === 'focus') {
+        focusInfo = { fullscreen: event.fullscreen === true, excluded: event.excluded === true };
+        updateHotkeyPause();
+      }
       else if (event.type === 'up') {
         if (pendingMouseOpen) pendingMouseRelease = { button: event.button };
         else if (wheelVisible) overlayWindow.webContents.send('orbit:trigger-release', { button: event.button });
@@ -584,6 +592,8 @@ function startHook() {
 async function stopHook() {
   const child = hookProcess;
   hookProcess = null;
+  focusInfo = { fullscreen: false, excluded: false };
+  updateHotkeyPause();
   updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: null });
   if (!child || child.exitCode !== null) return;
   await new Promise(resolve => {
@@ -711,15 +721,24 @@ function onHotkey(menuId = null) {
   showWheel(undefined, 'keyboard', '', menuId).catch(console.error);
 }
 
+function updateHotkeyPause() {
+  const paused = (state.gameMode !== false && focusInfo.fullscreen) || focusInfo.excluded;
+  if (paused === hotkeysPaused) return;
+  hotkeysPaused = paused;
+  registerHotkey();
+}
+
 function registerHotkey() {
   if (ISOLATED) return;
   const wanted = state.hotkey ?? 'Control+Space';
   if (registeredHotkey) { globalShortcut.unregister(registeredHotkey); registeredHotkey = ''; }
+  for (const key of registeredMenuHotkeys) globalShortcut.unregister(key);
+  registeredMenuHotkeys = [];
+  // Released shortcuts reach the game; the last registration result stays on screen meanwhile.
+  if (hotkeysPaused) { updateRuntime({ hotkeysPaused: true, hotkey: wanted }); return; }
   let registered = false;
   if (wanted) { try { registered = globalShortcut.register(wanted, onHotkey); } catch { registered = false; } }
   if (registered) registeredHotkey = wanted;
-  for (const key of registeredMenuHotkeys) globalShortcut.unregister(key);
-  registeredMenuHotkeys = [];
   const failed = [];
   for (const menu of state.menus) {
     if (!menu.hotkey) continue;
@@ -727,7 +746,7 @@ function registerHotkey() {
     try { ok = globalShortcut.register(menu.hotkey, () => onHotkey(menu.id)); } catch { ok = false; }
     if (ok) registeredMenuHotkeys.push(menu.hotkey); else failed.push(menu.hotkey);
   }
-  updateRuntime({ shortcutRegistered: registered, hotkey: wanted, menuHotkeysFailed: failed });
+  updateRuntime({ shortcutRegistered: registered, hotkey: wanted, menuHotkeysFailed: failed, hotkeysPaused: false });
 }
 
 async function refreshLegacy() {

@@ -3,7 +3,7 @@ $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $nativePath = Join-Path $projectRoot 'native\Orbit2.Input.exe'
 if (-not (Test-Path -LiteralPath $nativePath)) { & (Join-Path $PSScriptRoot 'build-native.ps1') }
 
-function Test-NativeLifecycle([string] $arguments, [bool] $sendQuit) {
+function Test-NativeLifecycle([string] $arguments, [bool] $sendQuit, [bool] $expectFocus = $false) {
     $startInfo = New-Object System.Diagnostics.ProcessStartInfo
     $startInfo.FileName = $nativePath
     $startInfo.Arguments = $arguments
@@ -20,6 +20,13 @@ function Test-NativeLifecycle([string] $arguments, [bool] $sendQuit) {
         if (-not $readyTask.Wait(3000)) { throw 'Helper readiness timed out.' }
         $ready = $readyTask.Result | ConvertFrom-Json
         if ($ready.type -ne 'ready') { throw 'Helper did not report readiness.' }
+        if ($expectFocus) {
+            # The focus watcher reports the program in front right after readiness.
+            $focusTask = $process.StandardOutput.ReadLineAsync()
+            if (-not $focusTask.Wait(3000)) { throw 'Focus report timed out.' }
+            $focus = $focusTask.Result | ConvertFrom-Json
+            if ($focus.type -ne 'focus' -or $focus.fullscreen -isnot [bool] -or $focus.excluded -isnot [bool]) { throw 'Helper did not report the program in front.' }
+        }
         if ($sendQuit) { $process.StandardInput.WriteLine('quit'); $process.StandardInput.Close() }
         if (-not $process.WaitForExit(4000)) { throw 'Helper did not cleanly exit.' }
         if ($process.ExitCode -ne 0) { throw "Helper exited with $($process.ExitCode)." }
@@ -35,6 +42,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native self-test failed.' }
 Test-NativeLifecycle '--button=4' $true
 Test-NativeLifecycle '--button=5' $true
 Test-NativeLifecycle '--button=0' $true
-Test-NativeLifecycle '--button=4 --game-mode=1' $true
+Test-NativeLifecycle '--button=4 --game-mode=1' $true $true
+Test-NativeLifecycle '"--exclude=game.exe|Steam.exe" --button=4' $true $true
 Test-NativeLifecycle '--button=4 --parent-pid=2147483647' $false
 Test-NativeLifecycle '--button=0 --parent-pid=2147483647' $false

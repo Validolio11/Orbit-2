@@ -202,3 +202,7 @@ button:focus-visible,select:focus-visible,input:focus-visible,textarea:focus-vis
 .wheel-item .group-indicator.sequence{letter-spacing:0;color:var(--accent);font-size:10px}
 .tab-key{font-size:9px;padding:0 4px;color:var(--muted);border-radius:4px}
 .menu-tab.active .tab-key{color:var(--accent);border-color:var(--accent-line)}
+
+/* 2.3: live state next to a setting (game mode stepping aside) */
+.status-note { display: inline-block; margin-top: 4px; color: var(--accent); font-weight: 500; }
+.setting-label code { font-size: 12px; padding: 1px 5px; border-radius: 5px; background: var(--surface-2, rgba(127,127,127,.14)); }

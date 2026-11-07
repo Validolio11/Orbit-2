@@ -79,8 +79,10 @@ function validateState(value) {
     return { id, name, icon: string(menu.icon ?? 'orbit', 'menu icon', 100), ...(apps.length ? { apps } : {}), ...(hotkey ? { hotkey } : {}), items: menu.items.map(item => validateAction(item, 0, ids)) };
   });
   if (!menus.some(menu => menu.id === value.activeMenuId)) throw new Error('The active menu does not exist.');
+  // Programs Orbit 2 never opens over: the side button and keyboard shortcuts stay theirs.
+  const excludedApps = validateMenuApps(value.excludedApps);
   return { version: 2, accent: value.accent ?? 'blue', hotkey: value.hotkey ?? 'Control+Space', wheelLabels: value.wheelLabels ?? true,
-    contextMenus: value.contextMenus ?? true, autoBackup: value.autoBackup ?? true, gameMode: value.gameMode ?? true, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
+    contextMenus: value.contextMenus ?? true, autoBackup: value.autoBackup ?? true, gameMode: value.gameMode ?? true, excludedApps, theme: value.theme, triggerButton: value.triggerButton, activationMode: value.activationMode, groupOpenMode: value.groupOpenMode ?? 'hover',
     hoverDelay: value.hoverDelay, enabled: value.enabled, reducedMotion: value.reducedMotion, closeOnOutsideClick: value.closeOnOutsideClick ?? true, launchAtLogin: value.launchAtLogin ?? true,
     wheelAddSlot: value.wheelAddSlot ?? true, introPending: value.introPending ?? false, wheelSize: value.wheelSize ?? 520, menus, activeMenuId: value.activeMenuId };
 }

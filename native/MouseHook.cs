@@ -20,6 +20,12 @@ internal static class MouseHook
     private static bool GameMode = false;
     private static bool PassedThrough = false;
     private static Func<bool> ForegroundFullscreen = IsForegroundFullscreen;
+    // Excluded programs: the side button always belongs to them. Their names are matched off the hook thread.
+    private static string[] Excluded = new string[0];
+    private static Func<bool> ForegroundExcluded = IsForegroundExcluded;
+    private static volatile uint WatchedId = 0, OwnerId = 0;
+    private static volatile bool WatchedExcluded = false;
+    private static bool FocusReported = false, LastFullscreen = false, LastExcluded = false;
 
     [StructLayout(LayoutKind.Sequential)] private struct POINT { public int x, y; }
     [StructLayout(LayoutKind.Sequential)] private struct MSLLHOOKSTRUCT { public POINT pt; public uint mouseData, flags, time; public UIntPtr extra; }
@@ -51,6 +57,7 @@ internal static class MouseHook
     [DllImport("user32.dll")] private static extern bool GetMonitorInfo(IntPtr monitor, ref MONITORINFO info);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr window, StringBuilder name, int size);
     [DllImport("user32.dll")] private static extern IntPtr GetShellWindow();
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern IntPtr GetWindowLongPtr(IntPtr window, int index);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint process);
     [DllImport("kernel32.dll")] private static extern IntPtr OpenProcess(uint access, bool inherit, uint id);
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)] private static extern bool QueryFullProcessImageName(IntPtr process, int flags, StringBuilder name, ref int size);
@@ -80,7 +87,9 @@ internal static class MouseHook
             if (arg.StartsWith("--button=") && !int.TryParse(arg.Substring(9), out SelectedButton)) return 2;
             if (arg.StartsWith("--parent-pid=")) int.TryParse(arg.Substring(13), out parentId);
             if (arg == "--game-mode=1") GameMode = true;
+            if (arg.StartsWith("--exclude=")) Excluded = ParseExcluded(arg.Substring(10));
         }
+        OwnerId = (uint)Math.Max(parentId, 0);
         if (SelectedButton != 0 && SelectedButton != 4 && SelectedButton != 5) return 2;
         try { SetProcessDpiAwarenessContext(new IntPtr(-4)); } catch (EntryPointNotFoundException) { }
         MainThread = GetCurrentThreadId();
@@ -100,8 +109,10 @@ internal static class MouseHook
             watchdog = new Timer(delegate(object unused) { try { using (var process = Process.GetProcessById(owner)) if (process.HasExited) RequestStop(); } catch { RequestStop(); } }, null, 1000, 1000);
         }
         Enqueue("{\"type\":\"ready\",\"button\":" + SelectedButton + "}");
+        // Four times a second: which program is in front, whether it fills its monitor and whether it is excluded.
+        var focusWatch = new Timer(WatchForeground, null, 0, 250);
         try { while (GetMessage(out message, IntPtr.Zero, 0, 0) > 0) { } }
-        finally { Running = false; if (Hook != IntPtr.Zero) UnhookWindowsHookEx(Hook); Hook = IntPtr.Zero; if (watchdog != null) watchdog.Dispose(); WakeWriter.Set(); writer.Join(500); }
+        finally { Running = false; if (Hook != IntPtr.Zero) UnhookWindowsHookEx(Hook); Hook = IntPtr.Zero; if (watchdog != null) watchdog.Dispose(); focusWatch.Dispose(); WakeWriter.Set(); writer.Join(500); }
         return 0;
     }
 
@@ -136,7 +147,7 @@ internal static class MouseHook
             if (button == SelectedButton)
             {
                 // A press that started over a fullscreen program passes through together with its release.
-                if (kind == WM_XBUTTONDOWN) PassedThrough = GameMode && ForegroundFullscreen();
+                if (kind == WM_XBUTTONDOWN) PassedThrough = (GameMode && ForegroundFullscreen()) || ForegroundExcluded();
                 if (PassedThrough) { if (kind == WM_XBUTTONUP) PassedThrough = false; return false; }
                 // The program in front is read here, before the wheel can take focus.
                 string foreground = kind == WM_XBUTTONDOWN ? ",\"foreground\":\"" + ForegroundMarker() + "\"" : "";
@@ -152,6 +163,13 @@ internal static class MouseHook
     {
         IntPtr window = GetForegroundWindow();
         if (window == IntPtr.Zero || window == GetShellWindow()) return false;
+        // Orbit 2's own windows (the wheel overlay covers its display) never count as a game.
+        uint id;
+        GetWindowThreadProcessId(window, out id);
+        if (OwnerId != 0 && id == OwnerId) return false;
+        // A maximized window with a title bar is ordinary work, even when an auto-hidden taskbar lets it fill the screen.
+        long style = GetWindowLongPtr(window, -16).ToInt64();
+        if ((style & 0x00C00000L) == 0x00C00000L && (style & 0x01000000L) != 0) return false;
         var name = new StringBuilder(64);
         GetClassName(window, name, name.Capacity);
         string kind = name.ToString();
@@ -161,6 +179,46 @@ internal static class MouseHook
         var info = new MONITORINFO { size = Marshal.SizeOf(typeof(MONITORINFO)) };
         if (!GetMonitorInfo(MonitorFromWindow(window, 2), ref info)) return false;
         return rect.left <= info.monitor.left && rect.top <= info.monitor.top && rect.right >= info.monitor.right && rect.bottom >= info.monitor.bottom;
+    }
+
+    // Reads only the cached decision: the timer below does the slow process lookup.
+    private static bool IsForegroundExcluded()
+    {
+        if (Excluded.Length == 0) return false;
+        uint id = ForegroundId();
+        return id != 0 && id == WatchedId && WatchedExcluded;
+    }
+
+    private static string[] ParseExcluded(string value)
+    {
+        var names = new System.Collections.Generic.List<string>();
+        foreach (string part in value.Split('|'))
+        {
+            string name = part.Trim().ToLowerInvariant();
+            if (name.Length > 0 && name.Length <= 260 && name.EndsWith(".exe") && name.IndexOfAny(new[] { '\\', '/', ':', '"', '<', '>', '?', '*' }) < 0 && !names.Contains(name)) names.Add(name);
+            if (names.Count == 30) break;
+        }
+        return names.ToArray();
+    }
+
+    private static void WatchForeground(object unused)
+    {
+        try
+        {
+            uint id = ForegroundId();
+            if (id != WatchedId)
+            {
+                bool excluded = false;
+                if (id != 0 && Excluded.Length > 0) excluded = Array.IndexOf(Excluded, Path.GetFileName(ProcessPath(id)).ToLowerInvariant()) >= 0;
+                WatchedExcluded = excluded;
+                WatchedId = id;
+            }
+            bool fullscreen = IsForegroundFullscreen(), excludedNow = id != 0 && WatchedExcluded;
+            if (FocusReported && fullscreen == LastFullscreen && excludedNow == LastExcluded) return;
+            FocusReported = true; LastFullscreen = fullscreen; LastExcluded = excludedNow;
+            Enqueue("{\"type\":\"focus\",\"fullscreen\":" + (fullscreen ? "true" : "false") + ",\"excluded\":" + (excludedNow ? "true" : "false") + "}");
+        }
+        catch { }
     }
 
     private static int RunSelfTest()
@@ -193,7 +251,15 @@ internal static class MouseHook
         passed &= !InspectMouse(WM_XBUTTONUP, mouse);
         passed &= InspectMouse(WM_XBUTTONDOWN, mouse);
         passed &= InspectMouse(WM_XBUTTONUP, mouse);
-        GameMode = false; SelectedButton = 0; ForegroundFullscreen = IsForegroundFullscreen;
+        GameMode = false;
+        // Excluded programs keep the button whether or not game mode is on.
+        ForegroundExcluded = delegate { return true; };
+        passed &= !InspectMouse(WM_XBUTTONDOWN, mouse);
+        passed &= !InspectMouse(WM_XBUTTONUP, mouse);
+        ForegroundExcluded = IsForegroundExcluded;
+        string[] parsed = ParseExcluded(" Game.EXE|game.exe|..\\x.exe|notes.txt||Steam.exe");
+        passed &= parsed.Length == 2 && parsed[0] == "game.exe" && parsed[1] == "steam.exe";
+        SelectedButton = 0; ForegroundFullscreen = IsForegroundFullscreen;
         string value;
         int events = 0, normalClicks = 0;
         bool left = false, right = false, middle = false;
@@ -210,7 +276,7 @@ internal static class MouseHook
         }
         passed &= events == 9 && normalClicks == 3 && left && right && middle;
         if (!passed) { Console.Error.WriteLine("Mouse event self-test failed."); return 5; }
-        Console.WriteLine("{\"ok\":true,\"architecture\":\"x64\",\"buttons\":[4,5],\"outsideWatcher\":true,\"normalClicksPassThrough\":true,\"watcherPassesSideButtons\":true,\"gameModePassesThrough\":true}");
+        Console.WriteLine("{\"ok\":true,\"architecture\":\"x64\",\"buttons\":[4,5],\"outsideWatcher\":true,\"normalClicksPassThrough\":true,\"watcherPassesSideButtons\":true,\"gameModePassesThrough\":true,\"excludedProgramsPassThrough\":true}");
         return 0;
     }
 

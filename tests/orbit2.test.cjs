@@ -147,3 +147,13 @@ test('game mode defaults on for Orbit settings and keeps an explicit opt-out', (
   assert.equal(validateState({ ...legacyConfig(), gameMode: false }).gameMode, false);
   assert.throws(() => validateState({ ...legacyConfig(), gameMode: 'on' }), /gameMode/);
 });
+
+test('excluded programs are normalized .exe names and default to none', () => {
+  assert.deepEqual(validateState(legacyConfig()).excludedApps, []);
+  const state = validateState({ ...legacyConfig(), excludedApps: ['D:\\Games\\Game.EXE', 'game.exe', 'steam.exe'] });
+  assert.deepEqual(state.excludedApps, ['game.exe', 'steam.exe']);
+  assert.deepEqual(validateState(JSON.parse(JSON.stringify(state))).excludedApps, ['game.exe', 'steam.exe']);
+  // The hook receives the list joined by "|", which no valid name may contain.
+  for (const excludedApps of [['a|b.exe'], ['notes.txt'], 'game.exe', Array.from({ length: 31 }, (_, i) => `g${i}.exe`)])
+    assert.throws(() => validateState({ ...legacyConfig(), excludedApps }));
+});

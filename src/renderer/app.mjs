@@ -165,7 +165,8 @@ function controlsPage(){
     <section class="settings-section"><div class="mouse-visual"><div class="mouse-diagram" aria-hidden="true"><span class="mouse-side forward ${state.triggerButton===5?'active':''}"></span><span class="mouse-side back ${state.triggerButton===4?'active':''}"></span></div><div><h2>Виклик колеса мишею</h2><p>Стандартні бічні кнопки Mouse 4 та Mouse 5.</p>${statusMarkup()}</div></div>
     <div class="setting-row"><div class="setting-label"><strong>Orbit у фоновому режимі</strong><p>Коли ввімкнено, обрана бічна кнопка викликає колесо замість переходу назад або вперед.</p></div><button class="toggle ${state.enabled?'on':''}" data-toggle="enabled" role="switch" aria-checked="${state.enabled}" aria-label="Orbit у фоновому режимі"></button></div>
     <div class="setting-row"><div class="setting-label"><strong>Запускати разом з Windows</strong><p>Orbit стартує у фоні після входу в систему, тож бічна кнопка працює одразу.</p></div><button class="toggle ${state.launchAtLogin!==false?'on':''}" data-toggle="launchAtLogin" role="switch" aria-checked="${state.launchAtLogin!==false}" aria-label="Запускати разом з Windows"></button></div>
-    <div class="setting-row"><div class="setting-label"><strong>Ігровий режим</strong><p>Над повноекранною грою чи програмою бічна кнопка працює як звичайно й не відкриває колесо, тож нічого не перебиває гру.</p></div><button class="toggle ${state.gameMode!==false?'on':''}" data-toggle="gameMode" role="switch" aria-checked="${state.gameMode!==false}" aria-label="Ігровий режим"></button></div>
+    <div class="setting-row"><div class="setting-label"><strong>Ігровий режим</strong><p>Над повноекранною грою чи програмою бічна кнопка й клавіатурний виклик працюють як звичайно й не відкривають колесо, тож нічого не перебиває гру.${runtime.hotkeysPaused?' <span class="status-note">Зараз Orbit 2 поступається програмі на передньому плані.</span>':''}</p></div><button class="toggle ${state.gameMode!==false?'on':''}" data-toggle="gameMode" role="switch" aria-checked="${state.gameMode!==false}" aria-label="Ігровий режим"></button></div>
+    <div class="setting-row"><div class="setting-label"><strong>Не відкривати над програмами</strong><p>${state.excludedApps?.length?`Над ${state.excludedApps.map(name=>`<code>${e(name)}</code>`).join(', ')} колесо не відкривається навіть у вікні.`:'Наприклад, ігри у віконному режимі або програми, яким потрібні бічні кнопки.'}</p></div><button class="btn" data-command="excluded-apps">${icon('edit',13)}${state.excludedApps?.length?'Змінити':'Додати'}</button></div>
     ${adminStartRow()}
     <div class="setting-row"><div class="setting-label"><strong>Кнопка виклику</strong><p>Затисніть кнопку, щоб відкрити колесо біля курсора.</p></div><select class="select" data-preference="triggerButton" aria-label="Кнопка виклику"><option value="4" ${state.triggerButton===4?'selected':''}>Mouse 4 · назад</option><option value="5" ${state.triggerButton===5?'selected':''}>Mouse 5 · вперед</option></select></div>
     <div class="setting-row"><div class="setting-label"><strong>Клавіатурний виклик</strong><p>${!state.hotkey?'Колесо відкривається лише мишею.':runtime.hotkey===state.hotkey?(runtime.shortcutRegistered?'Доступний у будь-якій програмі.':'Скорочення зайняте іншою програмою — оберіть інше.'):'Додатковий спосіб відкрити колесо.'}</p></div><select class="select" data-preference="hotkey" aria-label="Клавіатурний виклик">${HOTKEYS.map(([value,label])=>`<option value="${e(value)}" ${(state.hotkey??'Control+Space')===value?'selected':''}>${e(label)}</option>`).join('')}</select></div></section>
@@ -232,6 +233,22 @@ function menuDialog(mode='new'){
     next.menus.forEach(m=>{if(m.id!==targetId)m.apps=(m.apps||[]).filter(app=>!apps.includes(app));});
     if(await save(next,editing?'Меню збережено':'Меню створено'))closeModal();
   };
+}
+// The same program-name rules as linked menus: one .exe file name, case-insensitive.
+function programFromInput(value){let name=String(value||'').trim().split(/[\\/]/).pop().toLowerCase();if(!name)return '';if(!/\.exe$/.test(name))name+='.exe';return /^[^<>:"|?*]+\.exe$/.test(name)?name:null;}
+function excludedDialog(){
+  let apps=[...(state.excludedApps||[])];
+  const chips=()=>apps.length?apps.map(name=>`<span class="app-chip">${icon('app',12)}${e(name)}<button type="button" data-remove-app="${e(name)}" aria-label="Прибрати ${e(name)}">${icon('close',11)}</button></span>`).join(''):'<span class="field-note">Список порожній — колесо відкривається над усіма програмами.</span>';
+  modal('Не відкривати над програмами',`<form id="excluded-form" class="modal-body"><div class="field"><span class="field-title">Програми</span><div class="app-chips" id="excluded-apps">${chips()}</div><div class="field-inline"><input id="excluded-input" placeholder="Наприклад, game.exe" aria-label="Назва програми (.exe)"><button class="btn" type="button" id="excluded-add">${icon('plus',13)}Додати</button><button class="btn" type="button" id="excluded-pick">${icon('search',13)}Вибрати…</button></div><small>Коли така програма на передньому плані, бічна кнопка й гарячі клавіші Orbit 2 дістаються їй. Працює і для ігор у вікні, яких ігровий режим не помічає.</small></div><p class="form-error" id="form-error" role="alert"></p></form>`,`<button class="btn" data-command="dismiss">Скасувати</button><button class="btn primary" type="submit" form="excluded-form">Зберегти</button>`);
+  const error=document.querySelector('#form-error'),input=document.querySelector('#excluded-input');
+  const redraw=()=>{document.querySelector('#excluded-apps').innerHTML=chips();};
+  const add=value=>{const name=programFromInput(value);if(name==='')return true;if(name===null){error.textContent='Вкажіть назву файлу програми, наприклад game.exe.';return false;}if(!apps.includes(name)){if(apps.length>=30){error.textContent='Можна додати до 30 програм.';return false;}apps.push(name);}error.textContent='';input.value='';redraw();return true;};
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();add(input.value);}});
+  document.querySelector('#excluded-add').onclick=()=>add(input.value);
+  document.querySelector('#excluded-pick').onclick=async()=>{try{const name=await api.pickProgram();if(name)add(name);}catch(failure){error.textContent=cleanError(failure.message);}};
+  document.querySelector('#excluded-apps').addEventListener('click',event=>{const button=event.target.closest('[data-remove-app]');if(button){apps=apps.filter(name=>name!==button.dataset.removeApp);redraw();}});
+  queueMicrotask(()=>input.focus());
+  document.querySelector('#excluded-form').onsubmit=async event=>{event.preventDefault();if(!add(input.value))return;if(await save({...structuredClone(state),excludedApps:apps},'Список збережено'))closeModal();};
 }
 function deleteDialog(type,id){const item=type==='menu'?currentMenu():locate(id)?.item;if(!item)return;modal(type==='menu'?'Видалити меню?':'Видалити дію?',`<div class="modal-body"><p class="delete-copy">Видалити <strong>${e(item.name)}</strong>${item.kind==='group'||type==='menu'?' разом із вкладеними діями':''}? Файли та програми на комп’ютері залишаться на місці.</p></div>`,`<button class="btn" data-command="dismiss">Скасувати</button><button class="btn danger" id="confirm-delete">${icon('trash',14)}Видалити</button>`);document.querySelector('#confirm-delete').onclick=async()=>{const next=structuredClone(state);if(type==='menu'){next.menus=next.menus.filter(m=>m.id!==item.id);next.activeMenuId=next.menus[0].id;groupPath=[];}else{const old=state;state=next;const found=locate(id);found.items.splice(found.index,1);state=old;}const previous=state;if(await save(next)){closeModal();undoToast(`«${item.name}» видалено`,previous);}};}
 function actionDialog(id){
@@ -388,6 +405,8 @@ function openCommandPalette(){
     command('Викликати колесо','play',()=>api.showWheel(),'показати перевірити'),
     command('Створити меню','wheel',()=>{page='menus';render();menuDialog();}),
     command('Прив’язати поточне меню до програм','link',()=>{page='menus';render();menuDialog('apps');}),
+    command('Не відкривати над програмами…','close',()=>{page='controls';render();excludedDialog();},'виключити гра ігри ігнорувати'),
+    command(state.gameMode!==false?'Вимкнути ігровий режим':'Увімкнути ігровий режим','play',()=>change({gameMode:state.gameMode===false}),'гра повноекранний'),
     command(document.documentElement.dataset.theme==='dark'?'Світла тема':'Темна тема',document.documentElement.dataset.theme==='dark'?'sun':'moon',()=>runCommand('toggle-theme'),'тема'),
     command('Створити резервну копію','save',()=>runCommand('create-backup'),'backup копія'),
     command('Експортувати налаштування','export',()=>runCommand('export')),
@@ -477,6 +496,7 @@ async function runCommand(command){
       case 'dismiss-intro':await change({introPending:false});break;
       case 'palette':openCommandPalette();break;
       case 'menu-apps':menuDialog('apps');break;
+      case 'excluded-apps':excludedDialog();break;
       case 'quit-legacy':{const result=await api.quitLegacy();if(result.ok)toast('Orbit закрито');else toast(result.error,true);break;}
       case 'create-backup':await api.createBackup();toast('Резервну копію створено');loadBackups();break;
       case 'reset-usage':modal('Очистити статистику?',`<div class="modal-body"><p class="delete-copy">Лічильники запусків на сторінці «Огляд» буде скинуто. Меню й дії не зміняться.</p></div>`,`<button class="btn" data-command="dismiss">Скасувати</button><button class="btn danger" id="confirm-reset-usage">${icon('trash',14)}Очистити</button>`);document.querySelector('#confirm-reset-usage').onclick=async()=>{usage=await api.resetUsage();closeModal();render();toast('Статистику очищено');};break;
