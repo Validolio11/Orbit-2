@@ -590,7 +590,8 @@ async function init(){
   if(!api){root.innerHTML='<div class="empty-state"><h1>Orbit 2</h1><p>Відкрийте застосунок через Orbit2.exe або npm start.</p></div>';return;}
   state=await api.getState();runtime=await api.getRuntime();updateStatus=await api.getUpdateStatus();applyTheme();
   api.onUpdateStatus(next=>{updateStatus=next;if(!overlay)refreshUpdates(next);});
-  api.onStateChanged(next=>{state=next;applyTheme();if(!overlay){trimGroupPath();render();}else if(wheelOpen&&!wheelBusy){clearWheelTimers();restackWheel();wheelSelected=-1;drawOverlay();}});
+  // The window that saved already shows this state; redrawing it again would replace the DOM under the user.
+  api.onStateChanged(next=>{if(JSON.stringify(next)===JSON.stringify(state))return;state=next;applyTheme();if(!overlay){trimGroupPath();render();}else if(wheelOpen&&!wheelBusy){clearWheelTimers();restackWheel();wheelSelected=-1;drawOverlay();}});
   api.onRuntimeChanged(next=>{runtime=next;if(!overlay&&!document.querySelector('.modal')&&!paletteOpen())render();});
   if(!overlay){
     usage=await api.getUsage().catch(()=>null);

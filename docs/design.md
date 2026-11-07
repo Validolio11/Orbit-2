@@ -1,4 +1,17 @@
-# Orbit · approved direction
+# Orbit 2 · design direction
+
+Orbit 2 keeps Orbit's Geist foundation (compact type, single-pixel borders, restrained surfaces, Geist and Geist Mono) and adds one controlled colour: a user-selected accent.
+
+- Accent: blue by default; violet, green, amber, rose and monochrome are offered in Settings → Appearance. The accent marks only state and the next action: selected sector, hover countdown arc, active navigation, toggles, primary buttons, focus rings, chips and statistics. Vendor colours still appear only inside program icons.
+- Surfaces: slightly cooler near-black dark theme (#09090b base), panels one step lighter than the page so cards read as cards; 8px controls, 12px panels, 14px dialogs.
+- Identity: the orbit mark gains a second, fainter orbit for "2" on an accent-blue tile (`assets/orbit.svg`), so Orbit and Orbit 2 are distinguishable in the taskbar and Start menu. The titlebar shows the mark, "Orbit", an accent "2" badge and the version.
+- Wheel: the center previews the hovered action (name and verb in accent); a thin arc outside the sector fills over the hover delay; numbers 1–9 appear only when the wheel was opened from the keyboard; labels can be hidden for a quieter wheel; items fade in with a 12ms stagger that reduced motion turns off. Keyboard focus is shown by the highlighted sector, not a focus box.
+- Command palette (Ctrl+K and the titlebar search field): sections Дії, Групи, Команди, Перейти, Меню; actions sorted by real launch counts; Enter runs, Shift+Enter edits.
+- Overview: four stat cards, a 14-day activity bar chart with today in full accent, top and recent actions, tips. Only real local counts are shown; empty states explain how numbers appear.
+- Keys action: shortcut captured by pressing it, displayed as keycaps; preset chips for common commands.
+- Reject: fabricated statistics, decorative illustrations, gradients outside the brand mark and welcome card, more than one accent at a time.
+
+# Orbit 1 · approved direction (foundation)
 
 The user approved option 5, Vercel Geist, on 2026-11-01. Direct implementation is authorized.
 
