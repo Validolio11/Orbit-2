@@ -1,4 +1,4 @@
-name: Release Orbit
+name: Release Orbit 2
 on:
   push:
     tags: ['v*']
@@ -52,6 +52,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $orbitReleaseVersion = node -p "require('./package.json').version"
-          gh release create "v$orbitReleaseVersion" "release/Orbit2-$orbitReleaseVersion-win32-x64.zip" "release/Orbit2-Setup-$orbitReleaseVersion.exe" "release/SHA256SUMS.txt" --verify-tag --title "Orbit $orbitReleaseVersion" --generate-notes --draft
+          gh release create "v$orbitReleaseVersion" "release/Orbit2-$orbitReleaseVersion-win32-x64.zip" "release/Orbit2-Setup-$orbitReleaseVersion.exe" "release/SHA256SUMS.txt" --verify-tag --title "Orbit 2 $orbitReleaseVersion" --generate-notes --draft
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
           gh release edit "v$orbitReleaseVersion" --draft=false --latest
