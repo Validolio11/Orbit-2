@@ -2,7 +2,7 @@ import {escapeHTML as e} from './wheel.mjs';
 
 function view(status){
   const busy=['checking','downloading','installing'].includes(status.phase);
-  const messages={idle:'Перевірте, чи доступна нова версія.',checking:'Перевіряємо нові версії…',available:`Доступна версія ${status.version||''}.`,'up-to-date':'Встановлено останню версію.',downloading:`Завантаження ${Math.round(status.progress||0)}%…`,ready:'Оновлення готове. Під час встановлення Orbit перезапуститься.',installing:'Установлюємо оновлення…',error:'Не вдалося перевірити оновлення. Спробуйте ще раз.'};
+  const messages={idle:'Перевірте, чи доступна нова версія.',checking:'Перевіряємо нові версії…',available:`Доступна версія ${status.version||''}.`,'up-to-date':'Встановлено останню версію.',downloading:`Завантаження ${Math.round(status.progress||0)}%…`,ready:'Оновлення готове. Під час встановлення Orbit 2 перезапуститься.',installing:'Установлюємо оновлення…',error:'Не вдалося перевірити оновлення. Спробуйте ще раз.'};
   return {busy,message:status.message||messages[status.phase]||messages.idle,
     checkHidden:['ready','installing'].includes(status.phase),
     actionHidden:!['available','downloading','ready','installing'].includes(status.phase),
