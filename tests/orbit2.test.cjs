@@ -7,7 +7,7 @@ const { parseShortcut, KEY_NAMES } = require('../src/shortcuts.cjs');
 const { validateState, validateAction, menuForProgram, programName } = require('../src/core.cjs');
 const { createUsage, sanitize } = require('../src/usage.cjs');
 const { createBackups } = require('../src/backups.cjs');
-const { legacyPaths, readLegacyState } = require('../src/legacy.cjs');
+const { legacyPaths, readLegacyState, legacyRunValues } = require('../src/legacy.cjs');
 
 const action = (id, kind = 'app', target = 'C:\\Apps\\Editor.exe') => ({ id, name: 'Дія ' + id, kind, target, args: '', icon: '', children: [] });
 const legacyConfig = () => ({ version: 1, theme: 'dark', triggerButton: 4, activationMode: 'hover', hoverDelay: 350, enabled: true, reducedMotion: false,
@@ -119,6 +119,21 @@ test('Orbit menus are imported from its settings or their backup copy', async t 
   const imported = await readLegacyState(paths, validateState);
   assert.equal(imported.version, 2);
   assert.equal(imported.menus[0].items[0].id, 'a');
+});
+
+test('closing Orbit removes only the sign-in entries that start its own Orbit.exe', () => {
+  const output = [
+    '',
+    'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+    '    com.creationsoft.orbit    REG_SZ    "C:\\Users\\Me\\AppData\\Local\\Programs\\Orbit\\Orbit.exe" --hidden',
+    '    com.creationsoft.orbit2    REG_SZ    "C:\\Users\\Me\\AppData\\Local\\Programs\\Orbit 2\\Orbit2.exe" --hidden',
+    '    Discord    REG_SZ    "C:\\Users\\Me\\AppData\\Local\\Discord\\Update.exe" --processStart Discord.exe',
+    '    Old Orbit    REG_EXPAND_SZ    c:\\users\\me\\appdata\\local\\programs\\orbit\\orbit.exe',
+    '',
+  ].join('\r\n');
+  assert.deepEqual(legacyRunValues(output, 'C:\\Users\\Me\\AppData\\Local\\Programs\\Orbit\\Orbit.exe'), ['com.creationsoft.orbit', 'Old Orbit']);
+  assert.deepEqual(legacyRunValues(output, ''), []);
+  assert.deepEqual(legacyRunValues('', 'C:\\Orbit.exe'), []);
 });
 
 test('the hover arc follows its sector and covers the whole ring for a single action', async () => {

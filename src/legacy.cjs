@@ -26,4 +26,14 @@ function isLegacyRunning() {
     (error, stdout) => resolve(!error && /"Orbit\.exe"/i.test(String(stdout || '')))));
 }
 
-module.exports = { legacyPaths, readLegacyState, isLegacyRunning };
+// Names of the HKCU Run values (from `reg query` output) that start this Orbit.exe at sign-in.
+function legacyRunValues(regOutput, executable) {
+  const wanted = String(executable || '').toLowerCase();
+  if (!wanted) return [];
+  return String(regOutput || '').split(/\r?\n/)
+    .map(line => /^\s{4}(.+?)\s{4}REG_(?:EXPAND_)?SZ\s{4}(.*)$/.exec(line))
+    .filter(match => match && match[2].toLowerCase().includes(wanted))
+    .map(match => match[1]);
+}
+
+module.exports = { legacyPaths, readLegacyState, isLegacyRunning, legacyRunValues };

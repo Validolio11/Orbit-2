@@ -25,6 +25,8 @@ let firstRun = false, stateRecoveryFile = null, stateRecoveredFromBackup = false
 let wheelMenuId = null, wheelMenuForced = false, registeredHotkey = '', registeredMenuHotkeys = [], usageSnapshot = null, trayTimer = null;
 // Keyboard shortcuts step aside while a fullscreen game (game mode) or an excluded program is in front.
 let hotkeysPaused = false, focusInfo = { fullscreen: false, excluded: false };
+// Unexpected stops of the mouse module: it is restarted a few times a minute before Orbit 2 gives up and says so.
+let hookRestarts = [], hookRestartTimer = null, legacyTimer = null;
 // The program that was in front when the wheel opened; the wheel's "+" adds it.
 let wheelForeground = null;
 const NATIVE = app.isPackaged && __dirname.includes('app.asar')
@@ -36,7 +38,7 @@ const { menuForProgram, foregroundCandidate, droppedAction, validateAction, vali
 const { parseShortcut } = require('./shortcuts.cjs');
 const { createUsage } = require('./usage.cjs');
 const { createBackups } = require('./backups.cjs');
-const { legacyPaths, readLegacyState, isLegacyRunning } = require('./legacy.cjs');
+const { legacyPaths, readLegacyState, isLegacyRunning, legacyRunValues } = require('./legacy.cjs');
 const { createAppCatalog, validatePackagedTarget, isLocalAppPath } = require('./app-catalog.cjs');
 const { createUpdater } = require('./updater.cjs');
 const UPDATE_REPOSITORY = 'Validolio11/Orbit-2';
@@ -280,15 +282,15 @@ async function restartWithRights(elevated) {
 async function setAdminStart(enabled) {
   if (typeof enabled !== 'boolean') throw new Error('Invalid administrator start preference.');
   await refreshAdminStart();
-  if (!runtime.adminStart.available) return { ok: false, error: 'Запуск з правами адміністратора доступний у встановленому Orbit для облікового запису адміністратора.' };
+  if (!runtime.adminStart.available) return { ok: false, error: 'Запуск з правами адміністратора доступний у встановленому Orbit 2 для облікового запису адміністратора.' };
   const result = await runAdminTask(enabled ? 'register' : 'remove');
   if (result.code === 4) return { ok: false, canceled: true };
   await refreshAdminStart();
   if (result.code !== 0 || runtime.adminStart.enabled !== enabled) {
-    return { ok: false, error: `Windows не ${enabled ? 'створив' : 'видалив'} завдання запуску Orbit.${result.stderr.trim() ? ' ' + result.stderr.trim() : ''}` };
+    return { ok: false, error: `Windows не ${enabled ? 'створив' : 'видалив'} завдання запуску Orbit 2.${result.stderr.trim() ? ' ' + result.stderr.trim() : ''}` };
   }
   if (enabled !== runtime.adminStart.elevated && !(await restartWithRights(enabled))) {
-    return { ok: false, error: 'Налаштування збережено, але Orbit не вдалося перезапустити. Закрийте Orbit і відкрийте його знову.' };
+    return { ok: false, error: 'Налаштування збережено, але Orbit 2 не вдалося перезапустити. Закрийте Orbit 2 і відкрийте його знову.' };
   }
   return { ok: true };
 }
@@ -583,13 +585,50 @@ function startHook() {
     if (buffer.length > 65536) buffer = '';
   });
   child.stderr.on('data', chunk => { errorText = (errorText + chunk).slice(-2000); });
-  child.on('error', error => { if (hookProcess === child) { hookProcess = null; updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: error.message }); } });
-  child.on('exit', code => {
-    if (hookProcess === child) { hookProcess = null; updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: quitting ? null : errorText.trim() || `Модуль миші завершив роботу (${code}).` }); }
-  });
+  child.on('error', error => hookStopped(child, error.message));
+  child.on('exit', code => hookStopped(child, errorText.trim() || `код ${code}`));
+}
+
+function hookStopped(child, reason) {
+  if (hookProcess !== child) return;
+  hookProcess = null;
+  focusInfo = { fullscreen: false, excluded: false };
+  updateHotkeyPause();
+  if (quitting) { updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: null }); return; }
+  logHook(`mouse module stopped: ${reason}`);
+  const now = Date.now();
+  hookRestarts = hookRestarts.filter(time => now - time < 60000);
+  if (hookRestarts.length < 5) {
+    hookRestarts.push(now);
+    updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: null });
+    clearTimeout(hookRestartTimer);
+    hookRestartTimer = setTimeout(() => { hookRestartTimer = null; startHook(); }, 1000 * hookRestarts.length);
+  } else {
+    updateRuntime({ hookReady: false, outsideWatcherReady: false, hookError: `Модуль миші кілька разів зупинився (${reason}). Натисніть «Перезапустити модуль миші».` });
+  }
+}
+
+async function restartHook() {
+  hookRestarts = [];
+  await stopHook();
+  startHook();
+  return { ok: true };
+}
+
+// A short log of mouse-module stops in AppData explains a side button that stopped working.
+function logHook(line) {
+  console.warn('Orbit 2:', line);
+  if (ISOLATED) return;
+  const file = path.join(app.getPath('userData'), 'hook.log');
+  fsp.readFile(file, 'utf8').catch(() => '').then(text => {
+    const lines = text.split(/\r?\n/).filter(Boolean).slice(-99);
+    lines.push(`${new Date().toISOString()} ${app.getVersion()} ${line.replace(/\s+/g, ' ').slice(0, 500)}`);
+    return fsp.writeFile(file, lines.join('\n') + '\n', 'utf8');
+  }).catch(() => {});
 }
 
 async function stopHook() {
+  clearTimeout(hookRestartTimer); hookRestartTimer = null;
   const child = hookProcess;
   hookProcess = null;
   focusInfo = { fullscreen: false, excluded: false };
@@ -751,12 +790,28 @@ function registerHotkey() {
 
 async function refreshLegacy() {
   if (ISOLATED || process.platform !== 'win32') return;
-  updateRuntime({ legacyRunning: await isLegacyRunning() });
+  const running = await isLegacyRunning();
+  if (running !== runtime.legacyRunning) updateRuntime({ legacyRunning: running });
+}
+
+// Orbit registered itself under HKCU Run; only values that start Orbit.exe from its own folder are removed.
+function disableLegacyAutostart(executable) {
+  const reg = path.join(process.env.WINDIR || 'C:\\Windows', 'System32', 'reg.exe');
+  const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+  return new Promise(resolve => execFile(reg, ['query', key], { windowsHide: true, timeout: 5000 }, (error, stdout) => {
+    if (error) { resolve(); return; }
+    const names = legacyRunValues(String(stdout || ''), executable);
+    let pending = names.length;
+    if (!pending) { resolve(); return; }
+    for (const name of names) execFile(reg, ['delete', key, '/v', name, '/f'], { windowsHide: true, timeout: 5000 }, () => { if (--pending === 0) resolve(); });
+  }));
 }
 
 async function quitLegacy() {
   const { executable } = legacyPaths({ appData: app.getPath('appData'), localAppData: process.env.LOCALAPPDATA });
   if (!executable || !fs.existsSync(executable)) return { ok: false, error: 'Не знайдено встановлений Orbit. Закрийте його через іконку біля годинника.' };
+  // Without this Orbit would start again at the next sign-in and open a second wheel.
+  await disableLegacyAutostart(executable);
   await startProcess(executable, ['--quit'], { detached: true }).catch(() => {});
   for (let attempt = 0; attempt < 20 && await isLegacyRunning(); attempt++) await new Promise(resolve => setTimeout(resolve, 500));
   await refreshLegacy();
@@ -802,11 +857,14 @@ function registerIPC() {
   handle('orbit:create-backup', async () => { await configQueue; return backups.manual(JSON.stringify(state, null, 2)); });
   handle('orbit:restore-backup', async name => {
     const text = await backups.read(name);
+    let value;
+    try { value = JSON.parse(text); } catch { throw new Error('Резервна копія пошкоджена.'); }
     // The configuration being replaced is kept too, so a restore can itself be undone.
     await backups.manual(JSON.stringify(state, null, 2));
-    return saveState(JSON.parse(text));
+    return saveState(value);
   });
   handle('orbit:quit-legacy', quitLegacy);
+  handle('orbit:restart-hook', restartHook);
   handle('orbit:export-menu', async menuId => {
     const menu = state.menus.find(item => item.id === menuId);
     if (!menu) throw new Error('Меню не знайдено.');
@@ -877,7 +935,9 @@ function registerIPC() {
     if (result.canceled || !result.filePaths[0]) return null;
     const stat = await fsp.stat(result.filePaths[0]);
     if (stat.size > 1024 * 1024) throw new Error('Файл налаштувань завеликий.');
-    return saveState(JSON.parse(await fsp.readFile(result.filePaths[0], 'utf8')));
+    let value;
+    try { value = JSON.parse(await fsp.readFile(result.filePaths[0], 'utf8')); } catch { throw new Error('Файл налаштувань пошкоджений або це не JSON.'); }
+    return saveState(value);
   });
 }
 
@@ -959,7 +1019,7 @@ else {
   app.on('window-all-closed', () => { if (quitting || ISOLATED) app.quit(); });
   app.on('before-quit', event => {
     if (quitting) return;
-    event.preventDefault(); quitting = true; closeWheel(); globalShortcut.unregisterAll();
+    event.preventDefault(); quitting = true; closeWheel(); globalShortcut.unregisterAll(); clearInterval(legacyTimer);
     appCatalog.dispose();
     Promise.all([configQueue, stopHook(), updater?.dispose(), usage?.dispose()]).finally(() => { if (tray) { tray.destroy(); tray = null; } app.quit(); });
   });
@@ -992,7 +1052,7 @@ else {
       ? { type: 'info', title: 'Orbit 2', message: 'Налаштування Orbit 2 відновлено з резервної копії.', detail: `Основний файл був пошкоджений, тож останні зміни перед цим могли не зберегтися. Пошкоджений файл збережено як:\n${stateRecoveryFile}` }
       : { type: 'warning', title: 'Orbit 2', message: 'Не вдалося прочитати налаштування Orbit 2.', detail: `Меню скинуто до початкових. Попередній файл збережено як:\n${stateRecoveryFile}` }).catch(() => {});
     if (redirectedAppData) dialog.showMessageBox(mainWindow, { type: 'warning', title: 'Orbit 2', message: 'Зміни в цьому вікні Orbit 2 можуть не зберегтися.',
-      detail: `Orbit запущено з іншої програми, і Windows записує його налаштування в її окрему копію:\n${redirectedAppData}\n\nЗакрийте Orbit і запустіть його з меню «Пуск».` }).catch(() => {});
+      detail: `Orbit 2 запущено з іншої програми, і Windows записує його налаштування в її окрему копію:\n${redirectedAppData}\n\nЗакрийте Orbit 2 і запустіть його з меню «Пуск».` }).catch(() => {});
     if (!ISOLATED) logStartup().catch(() => {});
     // An install that failed after Orbit closed is reported once, before cleanup removes its files.
     if (app.isPackaged && !ISOLATED) updater.reportFailedInstall().catch(error => console.warn('Orbit 2: could not read the last update result.', error));
@@ -1004,6 +1064,8 @@ else {
     registerHotkey();
     startHook();
     refreshLegacy().catch(() => {});
+    // Orbit may start after Orbit 2 at sign-in, so it is looked for again every minute.
+    legacyTimer = setInterval(() => refreshLegacy().catch(() => {}), 60000);
     // Wait until a just-finished update helper has exited before removing its files.
     if (app.isPackaged) setTimeout(() => updater.cleanup().catch(() => {}), 30000);
   }).catch(async error => { console.error(error); quitting = true; appCatalog.dispose(); await stopHook(); globalShortcut.unregisterAll(); if (tray) tray.destroy(); app.exit(1); });

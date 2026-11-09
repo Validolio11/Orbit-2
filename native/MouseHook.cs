@@ -100,13 +100,20 @@ internal static class MouseHook
         if (Hook == IntPtr.Zero) { Console.Error.WriteLine("Unable to install mouse hook: " + Marshal.GetLastWin32Error()); return 3; }
         var writer = new Thread(WriteEvents); writer.IsBackground = true; writer.Start();
         // "foreground" asks for the program in front (keyboard-opened wheel); any other line stops the hook.
-        var input = new Thread(delegate() { try { string line; while ((line = Console.ReadLine()) != null) { if (line.Trim() == "foreground") { Enqueue("{\"type\":\"foreground\",\"path\":\"" + JsonText(ForegroundPath()) + "\"}"); continue; } RequestStop(); break; } } catch { } RequestStop(); });
+        var input = new Thread(delegate() { try { string line; while ((line = Console.ReadLine()) != null) { if (line.Trim() == "foreground") { Enqueue("{\"type\":\"foreground\",\"path\":\"" + JsonText(ForegroundPath()) + "\"}"); continue; } RequestStop("quit requested"); return; } RequestStop("input closed"); } catch (Exception error) { RequestStop("input failed: " + error.Message); } });
         input.IsBackground = true; input.Start();
         Timer watchdog = null;
         if (parentId > 0)
         {
             int owner = parentId;
-            watchdog = new Timer(delegate(object unused) { try { using (var process = Process.GetProcessById(owner)) if (process.HasExited) RequestStop(); } catch { RequestStop(); } }, null, 1000, 1000);
+            // Only a parent that is really gone stops the hook; a check that merely fails once is retried next second.
+            int failures = 0;
+            watchdog = new Timer(delegate(object unused)
+            {
+                try { using (var process = Process.GetProcessById(owner)) { if (process.HasExited) RequestStop("parent exited"); } failures = 0; }
+                catch (ArgumentException) { RequestStop("parent exited"); }
+                catch (Exception error) { if (++failures >= 10) RequestStop("parent check failed: " + error.Message); }
+            }, null, 1000, 1000);
         }
         Enqueue("{\"type\":\"ready\",\"button\":" + SelectedButton + "}");
         // Four times a second: which program is in front, whether it fills its monitor and whether it is excluded.
@@ -284,9 +291,15 @@ internal static class MouseHook
     private static void WriteEvents()
     {
         try { while (Running || !Events.IsEmpty) { string value; while (Events.TryDequeue(out value)) Console.WriteLine(ResolveForeground(value)); WakeWriter.WaitOne(100); } }
-        catch { RequestStop(); }
+        catch (Exception error) { RequestStop("output failed: " + error.Message); }
     }
-    private static void RequestStop() { PostThreadMessage(MainThread, WM_QUIT, UIntPtr.Zero, IntPtr.Zero); }
+    // The first reason is written to stderr so Orbit 2 can log why its mouse module stopped.
+    private static int StopRequested = 0;
+    private static void RequestStop(string reason)
+    {
+        if (Interlocked.Exchange(ref StopRequested, 1) == 0) { try { Console.Error.WriteLine("Orbit2.Input stopped: " + reason); } catch { } }
+        PostThreadMessage(MainThread, WM_QUIT, UIntPtr.Zero, IntPtr.Zero);
+    }
 
     private static int ReadShellIcon(string file)
     {
