@@ -291,11 +291,6 @@ impl App {
             ui.ctx()
                 .send_viewport_cmd(egui::ViewportCommand::Maximized(!max));
         }
-        ui.painter().hline(
-            rect.x_range(),
-            rect.bottom() - 0.5,
-            Stroke::new(1.0, p.line),
-        );
         let left = rect.left() + 23.0;
         paint_icon(
             ui,
@@ -373,14 +368,12 @@ impl App {
     fn sidebar(&mut self, ui: &mut egui::Ui) {
         let p = self.palette;
         let rect = ui.max_rect();
-        ui.painter()
-            .vline(rect.right() - 0.5, rect.y_range(), Stroke::new(1.0, p.line));
         let mut y = rect.top() + 24.0;
         ui.painter().text(
-            egui::pos2(rect.left() + 24.0, y + 6.0),
+            egui::pos2(rect.left() + 28.0, y + 6.0),
             Align2::LEFT_CENTER,
             "РОБОЧИЙ ПРОСТІР",
-            font(10.0, Weight::Regular),
+            font(10.0, Weight::Medium),
             p.faint,
         );
         y += 24.0;
@@ -391,18 +384,15 @@ impl App {
             );
             let response = ui.interact(row, egui::Id::unique(("nav", page as u8)), Sense::click());
             let active = self.page == page;
+            // Navigation pills: the current page is inverted, the rest sit on the canvas.
             if active {
-                ui.painter().rect(
-                    row,
-                    6,
-                    p.hover,
-                    Stroke::new(1.0, p.line),
-                    egui::StrokeKind::Inside,
-                );
+                ui.painter().rect_filled(row, 20, p.primary);
             } else if response.hovered() {
-                ui.painter().rect_filled(row, 6, p.subtle);
+                ui.painter().rect_filled(row, 20, p.panel);
             }
-            let color = if active || response.hovered() {
+            let color = if active {
+                p.on_primary
+            } else if response.hovered() {
                 p.text
             } else {
                 p.muted
@@ -410,32 +400,40 @@ impl App {
             paint_icon(
                 ui,
                 Rect::from_min_size(
-                    egui::pos2(row.left() + 11.0, row.center().y - 9.0),
+                    egui::pos2(row.left() + 14.0, row.center().y - 9.0),
                     Vec2::splat(18.0),
                 ),
                 page.icon(),
                 color,
             );
             ui.painter().text(
-                egui::pos2(row.left() + 40.0, row.center().y),
+                egui::pos2(row.left() + 42.0, row.center().y),
                 Align2::LEFT_CENTER,
                 page.label(),
-                font(13.0, Weight::Regular),
+                font(13.0, Weight::Medium),
                 color,
             );
             if page == Page::Menus {
                 let count = self.settings.menus.len().to_string();
-                let badge = Rect::from_min_size(
-                    egui::pos2(row.right() - 22.0, row.center().y - 8.0),
-                    Vec2::new(14.0, 16.0),
+                let badge = Rect::from_center_size(
+                    egui::pos2(row.right() - 22.0, row.center().y),
+                    Vec2::new(22.0, 20.0),
                 );
-                ui.painter().rect_filled(badge, 4, p.active);
+                ui.painter().rect_filled(
+                    badge,
+                    10,
+                    if active {
+                        p.on_primary.gamma_multiply(0.12)
+                    } else {
+                        p.active
+                    },
+                );
                 ui.painter().text(
                     badge.center(),
                     Align2::CENTER_CENTER,
                     count,
-                    font(10.0, Weight::Regular),
-                    p.muted,
+                    font(10.0, Weight::Medium),
+                    if active { p.on_primary } else { p.text },
                 );
             }
             if response
@@ -453,20 +451,16 @@ impl App {
             egui::pos2(rect.left() + 16.0, rect.bottom() - 162.0),
             Vec2::new(rect.width() - 32.0, 98.0),
         );
-        ui.painter().rect(
-            card,
-            8,
-            p.panel,
-            Stroke::new(1.0, p.line),
-            egui::StrokeKind::Inside,
-        );
-        ui.painter().circle_filled(
-            egui::pos2(card.left() + 15.0, card.top() + 20.0),
-            3.0,
-            if on { p.green } else { p.faint },
-        );
+        ui.painter().rect_filled(card, 20, p.panel);
+        let dot = egui::pos2(card.left() + 17.0, card.top() + 20.0);
+        if on {
+            ui.painter()
+                .circle_filled(dot, 6.0, p.green.gamma_multiply(0.25));
+        }
+        ui.painter()
+            .circle_filled(dot, 3.5, if on { p.green } else { p.faint });
         ui.painter().text(
-            egui::pos2(card.left() + 25.0, card.top() + 20.0),
+            egui::pos2(card.left() + 29.0, card.top() + 20.0),
             Align2::LEFT_CENTER,
             status_label(&self.settings, &runtime),
             font(12.0, Weight::Medium),
@@ -478,28 +472,23 @@ impl App {
             "Увімкніть у розділі «Керування»".into()
         };
         ui.painter().text(
-            egui::pos2(card.left() + 12.0, card.top() + 42.0),
+            egui::pos2(card.left() + 14.0, card.top() + 42.0),
             Align2::LEFT_CENTER,
             note,
             font(11.0, Weight::Regular),
             p.muted,
         );
         let kbd = Rect::from_min_size(
-            egui::pos2(card.left() + 12.0, card.top() + 60.0),
-            Vec2::new(82.0, 22.0),
+            egui::pos2(card.left() + 14.0, card.top() + 60.0),
+            Vec2::new(88.0, 24.0),
         );
-        ui.painter().rect_stroke(
-            kbd,
-            4,
-            Stroke::new(1.0, p.line_strong),
-            egui::StrokeKind::Inside,
-        );
+        ui.painter().rect_filled(kbd, 8, p.active);
         ui.painter().text(
             kbd.center(),
             Align2::CENTER_CENTER,
             "Ctrl + Space",
             font(10.0, Weight::Mono),
-            p.muted,
+            p.text,
         );
         let footer_y = rect.bottom() - 36.0;
         ui.painter().text(
@@ -509,10 +498,8 @@ impl App {
             font(11.0, Weight::Regular),
             p.faint,
         );
-        let theme_button = Rect::from_center_size(
-            egui::pos2(rect.right() - 30.0, footer_y),
-            Vec2::new(28.0, 26.0),
-        );
+        let theme_button =
+            Rect::from_center_size(egui::pos2(rect.right() - 30.0, footer_y), Vec2::splat(30.0));
         let response = ui
             .interact(
                 theme_button,
@@ -520,22 +507,20 @@ impl App {
                 Sense::click(),
             )
             .on_hover_text("Перемкнути тему");
-        ui.painter().rect(
+        ui.painter().rect_filled(
             theme_button,
-            5,
+            15,
             if response.hovered() {
-                p.hover
+                p.active
             } else {
-                Color32::TRANSPARENT
+                p.panel
             },
-            Stroke::new(1.0, p.line),
-            egui::StrokeKind::Inside,
         );
         paint_icon(
             ui,
             Rect::from_center_size(theme_button.center(), Vec2::splat(14.0)),
             if p.dark { "sun" } else { "moon" },
-            p.muted,
+            if response.hovered() { p.text } else { p.muted },
         );
         if response.clicked() {
             let next = if p.dark { Theme::Light } else { Theme::Dark };
@@ -566,20 +551,50 @@ impl App {
             )
             .show(ctx, |ui| {
                 ui.set_max_width(screen.width() * 0.85);
+                // The system's toast: a capsule with a status dot and bold copy.
+                let ink = if error && !p.dark {
+                    Color32::WHITE
+                } else {
+                    p.on_primary
+                };
                 egui::Frame::new()
-                    .fill(if error { p.error } else { p.text }.gamma_multiply(fade))
-                    .corner_radius(7)
-                    .inner_margin(egui::Margin::symmetric(17, 11))
+                    .fill(if error { p.error } else { p.primary }.gamma_multiply(fade))
+                    .corner_radius(22)
+                    .shadow(egui::Shadow {
+                        offset: [0, 16],
+                        blur: 40,
+                        spread: 0,
+                        color: Color32::from_black_alpha((120.0 * fade) as u8),
+                    })
+                    .inner_margin(egui::Margin::symmetric(20, 13))
                     .show(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(text(
-                                message,
-                                12.0,
-                                Weight::Regular,
-                                p.bg.gamma_multiply(fade),
-                            ))
-                            .wrap(),
-                        );
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0;
+                            if !error {
+                                let (dot, _) =
+                                    ui.allocate_exact_size(Vec2::splat(16.0), Sense::hover());
+                                ui.painter().circle_filled(
+                                    dot.center(),
+                                    8.0,
+                                    p.green.gamma_multiply(fade),
+                                );
+                                paint_icon(
+                                    ui,
+                                    dot.shrink(3.0),
+                                    "check",
+                                    p.on_accent.gamma_multiply(fade),
+                                );
+                            }
+                            ui.add(
+                                egui::Label::new(text(
+                                    message,
+                                    12.0,
+                                    Weight::Medium,
+                                    ink.gamma_multiply(fade),
+                                ))
+                                .wrap(),
+                            );
+                        });
                     });
             });
     }
@@ -854,11 +869,13 @@ impl eframe::App for App {
         let p = self.palette;
         egui::Panel::top("titlebar")
             .exact_size(48.0)
+            .show_separator_line(false)
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| self.titlebar(ui));
         egui::Panel::left("sidebar")
             .exact_size(202.0)
             .resizable(false)
+            .show_separator_line(false)
             .frame(egui::Frame::new().fill(p.bg))
             .show(ui, |ui| self.sidebar(ui));
         egui::CentralPanel::default()
@@ -872,18 +889,24 @@ impl eframe::App for App {
                 egui::Id::unique("file-drop"),
             ));
             let area = Rect::from_min_max(egui::pos2(212.0, 58.0), screen.max - Vec2::splat(10.0));
-            painter.rect_stroke(area, 8, Stroke::new(2.0, p.text), egui::StrokeKind::Inside);
-            let label = Rect::from_center_size(
-                egui::pos2(area.center().x, area.bottom() - 40.0),
-                Vec2::new(230.0, 36.0),
+            painter.rect(
+                area,
+                theme::R_TILE,
+                p.green.gamma_multiply(0.06),
+                Stroke::new(2.0, p.green),
+                egui::StrokeKind::Inside,
             );
-            painter.rect_filled(label, 7, p.text);
+            let label = Rect::from_center_size(
+                egui::pos2(area.center().x, area.bottom() - 44.0),
+                Vec2::new(240.0, 40.0),
+            );
+            painter.rect_filled(label, 20, p.green);
             painter.text(
                 label.center(),
                 Align2::CENTER_CENTER,
                 "Відпустіть, щоб додати дію",
-                font(12.0, Weight::Regular),
-                p.bg,
+                font(13.0, Weight::Medium),
+                p.on_accent,
             );
         }
         self.dialogs(&ctx);

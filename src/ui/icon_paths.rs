@@ -6,7 +6,7 @@ pub fn markup(name: &str) -> Option<String> {
             r##"<ellipse cx="12" cy="12" rx="9" ry="4.5" transform="rotate(-40 12 12)"/><circle cx="12" cy="12" r="3"/><circle cx="18.9" cy="6.2" r="1.3" fill="currentColor" stroke="none"/>"##
         }
         "wheel" => {
-            r##"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v6m0 6v6M3 12h6m6 0h6M5.6 5.6l4.3 4.3m4.2 4.2 4.3 4.3M5.6 18.4l4.3-4.3m4.2-4.2 4.3-4.3"/>"##
+            r##"<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.25"/><path d="M12 3v5.75M12 15.25V21M3 12h5.75M15.25 12H21"/>"##
         }
         "grid" => {
             r##"<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>"##
@@ -264,7 +264,7 @@ pub fn svg(name: &str) -> String {
     } else {
         markup(name).or_else(|| markup("app")).unwrap_or_default()
     };
-    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"#)
+    format!(r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">{body}</svg>"#)
         .replace("currentColor", "white")
 }
 

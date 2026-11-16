@@ -490,10 +490,38 @@ pub fn find_own_window(title: &str) -> Option<isize> {
     (search.found != 0).then_some(search.found)
 }
 
+#[link(name = "dwmapi")]
+unsafe extern "system" {
+    fn DwmSetWindowAttribute(
+        hwnd: *mut c_void,
+        attribute: u32,
+        value: *const c_void,
+        size: u32,
+    ) -> i32;
+}
+
+/// Windows 11 gives every top-level window a hairline border, rounded corners and a shadow.
+/// The wheel window is a transparent square, so all three are switched off for it.
+fn strip_frame(hwnd: HWND) {
+    const NCRENDERING_POLICY: u32 = 2;
+    const WINDOW_CORNER_PREFERENCE: u32 = 33;
+    const BORDER_COLOR: u32 = 34;
+    for (attribute, value) in [
+        (NCRENDERING_POLICY, 1u32),       // DWMNCRP_DISABLED
+        (WINDOW_CORNER_PREFERENCE, 1u32), // DWMWCP_DONOTROUND
+        (BORDER_COLOR, 0xFFFF_FFFEu32),   // DWMWA_COLOR_NONE
+    ] {
+        unsafe {
+            DwmSetWindowAttribute(hwnd.0, attribute, &value as *const u32 as *const c_void, 4);
+        }
+    }
+}
+
 /// Shows a window at a position without waiting for the thread that owns it.
 pub fn place_window(handle: isize, rect: Rect, activate: bool) {
     unsafe {
         let hwnd = HWND(handle as *mut c_void);
+        strip_frame(hwnd);
         let mut flags = SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS;
         if !activate {
             flags |= SWP_NOACTIVATE;

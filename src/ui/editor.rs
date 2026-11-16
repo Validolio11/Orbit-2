@@ -2,7 +2,7 @@
 
 use super::dialogs::Dialog;
 use super::item_icon::{IconSource, paint_item_icon};
-use super::theme::{Palette, Weight, font, paint_icon, text};
+use super::theme::{Palette, R_TILE, Weight, font, paint_icon, text};
 use super::wheel::{self, DragView, Hit, Style, WheelView};
 use super::widgets::{self, Button, icon_button, section, select, setting_row, toggle};
 use crate::app::{App, Page, status_label};
@@ -24,6 +24,10 @@ pub struct WheelDrag {
 impl App {
     pub fn workspace(&mut self, ui: &mut Ui) {
         let p = self.palette;
+        // A minimized or hidden window has no room; the page layouts below assume a real width.
+        if ui.available_width() < 400.0 {
+            return;
+        }
         let mut scroll = egui::ScrollArea::vertical()
             .id_salt(("workspace", self.page as u8))
             .auto_shrink([false, false]);
@@ -67,7 +71,7 @@ impl App {
         let p = self.palette;
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                ui.label(text(title, 27.0, Weight::Semibold, p.text));
+                ui.label(text(title, 30.0, Weight::Semibold, p.text));
                 ui.add_space(2.0);
                 ui.label(text(note, 13.0, Weight::Regular, p.muted));
             });
@@ -89,7 +93,7 @@ impl App {
             |app, ui| {
                 if Button::new("Викликати колесо")
                     .icon("play", 14.0)
-                    .primary()
+                    .accent()
                     .show(ui)
                     .clicked()
                 {
@@ -152,35 +156,32 @@ impl App {
                 ),
             ] {
                 let (rect, response) =
-                    ui.allocate_exact_size(Vec2::new(width, 58.0), Sense::click());
-                ui.painter().rect(
+                    ui.allocate_exact_size(Vec2::new(width, 62.0), Sense::click());
+                ui.painter().rect_filled(
                     rect,
-                    8,
-                    if response.hovered() { p.subtle } else { p.bg },
-                    Stroke::new(1.0, p.line),
-                    StrokeKind::Inside,
+                    20,
+                    if response.hovered() { p.hover } else { p.panel },
                 );
+                let badge = rect.left_center() + Vec2::new(31.0, 0.0);
+                ui.painter().circle_filled(badge, 19.0, p.bg);
                 paint_icon(
                     ui,
-                    Rect::from_min_size(
-                        rect.left_center() + Vec2::new(13.0, -11.0),
-                        Vec2::splat(22.0),
-                    ),
+                    Rect::from_center_size(badge, Vec2::splat(18.0)),
                     icon,
-                    p.muted,
-                );
-                ui.painter().text(
-                    rect.left_center() + Vec2::new(47.0, -8.0),
-                    Align2::LEFT_CENTER,
-                    title,
-                    font(11.0, Weight::Medium),
                     p.text,
                 );
                 ui.painter().text(
-                    rect.left_center() + Vec2::new(47.0, 9.0),
+                    rect.left_center() + Vec2::new(62.0, -8.0),
+                    Align2::LEFT_CENTER,
+                    title,
+                    font(12.0, Weight::Medium),
+                    p.text,
+                );
+                ui.painter().text(
+                    rect.left_center() + Vec2::new(62.0, 9.0),
                     Align2::LEFT_CENTER,
                     note,
-                    font(10.0, Weight::Regular),
+                    font(11.0, Weight::Regular),
                     p.muted,
                 );
                 paint_icon(
@@ -214,18 +215,20 @@ impl App {
 
     fn intro_card(&mut self, ui: &mut Ui) {
         let p = self.palette;
-        egui::Frame::new().stroke(Stroke::new(1.0, p.line_strong)).corner_radius(10).fill(p.panel).inner_margin(egui::Margin::symmetric(20, 16)).show(ui, |ui| {
+        // The onboarding tile is the one volt surface in the app.
+        let white = Color32::WHITE;
+        egui::Frame::new().corner_radius(R_TILE).fill(p.volt).inner_margin(egui::Margin::symmetric(22, 18)).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 16.0;
-                super::theme::icon(ui, "mouse", 22.0, p.text);
-                let width = ui.available_width() - 110.0;
+                super::theme::icon(ui, "mouse", 22.0, white);
+                let width = ui.available_width() - 120.0;
                 ui.vertical(|ui| {
                     ui.set_width(width);
-                    ui.label(text(format!("Спробуйте зараз: затисніть бічну кнопку {} у будь-якій програмі", self.settings.trigger_button), 13.0, Weight::Semibold, p.text));
-                    ui.add(egui::Label::new(text("Колесо з’явиться біля курсора. Також працює Ctrl + Space. Сектор «+» на колесі додає програму, в якій ви зараз працюєте.", 12.0, Weight::Regular, p.muted)).wrap());
+                    ui.label(text(format!("Спробуйте зараз: затисніть бічну кнопку {} у будь-якій програмі", self.settings.trigger_button), 14.0, Weight::Semibold, white));
+                    ui.add(egui::Label::new(text("Колесо з’явиться біля курсора. Також працює Ctrl + Space. Сектор «+» на колесі додає програму, в якій ви зараз працюєте.", 12.0, Weight::Regular, white.gamma_multiply(0.8))).wrap());
                 });
-                if Button::new("Зрозуміло").small().show(ui).clicked() { self.change(|s| s.intro_pending = false, ""); }
+                if Button::new("Зрозуміло").small().primary().show(ui).clicked() { self.change(|s| s.intro_pending = false, ""); }
             });
         });
         ui.add_space(18.0);
@@ -233,20 +236,39 @@ impl App {
 
     fn menu_tabs(&mut self, ui: &mut Ui) {
         let p = self.palette;
-        let top = ui.cursor().top();
         let mut chosen = None;
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = 22.0;
+            ui.spacing_mut().item_spacing.x = 8.0;
             for menu in &self.settings.menus {
                 let active = menu.id == self.settings.active_menu_id;
                 let label = menu.name.clone();
                 let count = menu.items.len().to_string();
                 let galley =
                     ui.painter()
-                        .layout_no_wrap(label.clone(), font(12.0, Weight::Regular), p.text);
-                let (rect, response) =
-                    ui.allocate_exact_size(Vec2::new(galley.size().x + 40.0, 43.0), Sense::click());
-                let color = if active || response.hovered() {
+                        .layout_no_wrap(label.clone(), font(12.0, Weight::Medium), p.text);
+                let counter =
+                    ui.painter()
+                        .layout_no_wrap(count.clone(), font(10.0, Weight::Mono), p.text);
+                let (slot, response) = ui.allocate_exact_size(
+                    Vec2::new(galley.size().x + counter.size().x + 58.0, 36.0),
+                    Sense::click(),
+                );
+                // Tab pills: the open menu is inverted, the others are graphite.
+                let rect = slot;
+                ui.painter().rect_filled(
+                    rect,
+                    18,
+                    if active {
+                        p.primary
+                    } else if response.hovered() {
+                        p.active
+                    } else {
+                        p.panel
+                    },
+                );
+                let color = if active {
+                    p.on_primary
+                } else if response.hovered() {
                     p.text
                 } else {
                     p.muted
@@ -254,36 +276,26 @@ impl App {
                 paint_icon(
                     ui,
                     Rect::from_min_size(
-                        egui::pos2(rect.left(), rect.top() + 8.0),
-                        Vec2::splat(14.0),
+                        egui::pos2(rect.left() + 14.0, rect.center().y - 8.0),
+                        Vec2::splat(16.0),
                     ),
                     "wheel",
                     color,
                 );
                 ui.painter().text(
-                    egui::pos2(rect.left() + 21.0, rect.top() + 15.0),
+                    egui::pos2(rect.left() + 35.0, rect.center().y),
                     Align2::LEFT_CENTER,
                     &label,
-                    font(12.0, Weight::Regular),
+                    font(12.0, Weight::Medium),
                     color,
                 );
                 ui.painter().text(
-                    egui::pos2(rect.right() - 10.0, rect.top() + 15.0),
-                    Align2::LEFT_CENTER,
+                    egui::pos2(rect.right() - 14.0, rect.center().y),
+                    Align2::RIGHT_CENTER,
                     count,
                     font(10.0, Weight::Mono),
-                    p.faint,
+                    color.gamma_multiply(0.6),
                 );
-                if active {
-                    ui.painter().rect_filled(
-                        Rect::from_min_max(
-                            egui::pos2(rect.left(), rect.bottom() - 2.0),
-                            rect.right_bottom(),
-                        ),
-                        0,
-                        p.text,
-                    );
-                }
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .clicked()
@@ -292,7 +304,7 @@ impl App {
                     chosen = Some(menu.id.clone());
                 }
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.spacing_mut().item_spacing.x = 3.0;
                 if self.settings.menus.len() > 1
                     && icon_button(ui, "trash", 14.0, "Видалити меню", true, true).clicked()
@@ -313,12 +325,7 @@ impl App {
                 }
             });
         });
-        ui.painter().hline(
-            ui.max_rect().x_range(),
-            top + 43.0,
-            Stroke::new(1.0, p.line),
-        );
-        ui.add_space(14.0);
+        ui.add_space(16.0);
         if let Some(id) = chosen {
             self.group_path.clear();
             self.selected.clear();
@@ -348,25 +355,23 @@ impl App {
 
     fn panel_head(ui: &mut Ui, p: &Palette, title: &str, right: impl FnOnce(&mut Ui)) {
         ui.horizontal(|ui| {
-            ui.set_height(52.0);
-            ui.add_space(19.0);
-            ui.label(text(title, 12.0, Weight::Medium, p.text));
+            ui.set_height(56.0);
+            ui.add_space(22.0);
+            ui.label(text(title, 15.0, Weight::Semibold, p.text));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.add_space(14.0);
+                ui.add_space(16.0);
                 right(ui);
             });
         });
-        let y = ui.cursor().top();
-        ui.painter()
-            .hline(ui.max_rect().x_range(), y - 4.0, Stroke::new(1.0, p.line));
     }
 
     fn preview_panel(&mut self, ui: &mut Ui, items: &[Action], name: &str, nested: bool) {
         let p = self.palette;
-        egui::Frame::new().stroke(Stroke::new(1.0, p.line)).corner_radius(10).fill(p.bg).show(ui, |ui| {
+        // A night tile with a hairline ring: the stage the graphite wheel sits on, as it does over the desktop.
+        egui::Frame::new().stroke(Stroke::new(1.0, p.line)).corner_radius(R_TILE).fill(p.bg).show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 4.0;
-            Self::panel_head(ui, &p, "Попередній перегляд", |ui| { ui.label(text(format!("{} / 12", items.len()), 10.0, Weight::Mono, p.faint)); });
+            Self::panel_head(ui, &p, "Попередній перегляд", |ui| { super::theme::chip(ui, &format!("{} / 12", items.len()), p.panel, p.muted, false); });
             let width = ui.available_width();
             let (surface, _) = ui.allocate_exact_size(Vec2::new(width, width.max(320.0)), Sense::hover());
             // Dotted canvas.
@@ -401,11 +406,9 @@ impl App {
             }
             let label = if nested { name.to_uppercase() } else { "ORBIT / RADIAL MENU".into() };
             ui.painter().text(surface.right_bottom() - Vec2::new(16.0, 12.0), Align2::RIGHT_BOTTOM, label, font(8.0, Weight::Mono), p.faint);
-            let y = ui.cursor().top();
-            ui.painter().hline(ui.max_rect().x_range(), y, Stroke::new(1.0, p.line));
             ui.horizontal(|ui| {
                 ui.set_height(52.0);
-                ui.add_space(17.0);
+                ui.add_space(22.0);
                 super::theme::icon(ui, "info", 15.0, p.faint);
                 ui.label(text("Перетягніть сектор, щоб змінити порядок. Центр переносить дію на рівень вище.", 11.0, Weight::Regular, p.muted));
             });
@@ -478,8 +481,8 @@ impl App {
                 );
                 painter.rect(
                     rect,
-                    6,
-                    p.panel,
+                    18,
+                    p.active,
                     Stroke::new(1.0, p.line_strong),
                     StrokeKind::Inside,
                 );
@@ -549,9 +552,8 @@ impl App {
     fn action_panel(&mut self, ui: &mut Ui, items: &[Action], name: &str, nested: bool) {
         let p = self.palette;
         egui::Frame::new()
-            .stroke(Stroke::new(1.0, p.line))
-            .corner_radius(10)
-            .fill(p.bg)
+            .corner_radius(R_TILE)
+            .fill(p.panel)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 4.0;
@@ -596,12 +598,9 @@ impl App {
                 } else {
                     self.action_list(ui, items, nested);
                 }
-                let y = ui.cursor().top();
-                ui.painter()
-                    .hline(ui.max_rect().x_range(), y, Stroke::new(1.0, p.line));
                 ui.horizontal(|ui| {
-                    ui.set_height(38.0);
-                    ui.add_space(14.0);
+                    ui.set_height(44.0);
+                    ui.add_space(22.0);
                     ui.label(text(
                         if nested {
                             "Вкладене меню"
@@ -613,11 +612,11 @@ impl App {
                         p.faint,
                     ));
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.add_space(14.0);
+                        ui.add_space(22.0);
                         ui.label(text(
                             format!("{} / 12", items.len()),
                             10.0,
-                            Weight::Regular,
+                            Weight::Mono,
                             p.faint,
                         ));
                     });
@@ -717,44 +716,31 @@ impl App {
         let selected = self.selected == item.id;
         let dragging = self.list_drag.as_deref() == Some(item.id.as_str());
         let painter = ui.painter();
+        // Rows are inset rounded items on the graphite tile: steel when selected, lighter on hover.
+        let pill = rect.shrink2(Vec2::new(8.0, 2.0));
         let fill = match drop {
-            Some(None) => p.active,
-            _ if selected || response.hovered() => p.subtle,
-            _ => p.bg,
+            Some(None) => Some(p.active),
+            _ if selected => Some(p.active),
+            _ if response.hovered() => Some(p.hover),
+            _ => None,
         };
-        painter.rect_filled(rect, 0, fill);
+        if let Some(fill) = fill {
+            painter.rect_filled(pill, 16, fill);
+        }
         if let Some(error) = drop {
             painter.rect_stroke(
-                rect.shrink(1.0),
-                4,
-                Stroke::new(
-                    1.0,
-                    if error.is_none() {
-                        p.text
-                    } else {
-                        p.line_strong
-                    },
-                ),
+                pill,
+                16,
+                if error.is_none() {
+                    Stroke::new(2.0, p.accent_ink())
+                } else {
+                    Stroke::new(1.0, p.line_strong)
+                },
                 StrokeKind::Inside,
             );
         }
-        if selected {
-            painter.rect_filled(
-                Rect::from_min_max(
-                    rect.left_top() + Vec2::new(0.0, 16.0),
-                    rect.left_bottom() + Vec2::new(2.0, -16.0),
-                ),
-                0,
-                p.text,
-            );
-        }
-        painter.hline(
-            rect.x_range(),
-            rect.bottom() - 0.5,
-            Stroke::new(1.0, p.line),
-        );
         let alpha = if dragging { 0.4 } else { 1.0 };
-        let mut x = rect.left() + 15.0;
+        let mut x = rect.left() + 22.0;
         if !library {
             painter.text(
                 egui::pos2(x, rect.center().y),
@@ -767,13 +753,7 @@ impl App {
         }
         let icon_box =
             Rect::from_min_size(egui::pos2(x, rect.center().y - 17.0), Vec2::splat(34.0));
-        painter.rect(
-            icon_box,
-            7,
-            p.panel,
-            Stroke::new(1.0, p.line),
-            StrokeKind::Inside,
-        );
+        painter.rect_filled(icon_box, 11, p.bg);
         paint_item_icon(
             ui,
             Rect::from_center_size(icon_box.center(), Vec2::splat(19.0)),
@@ -826,7 +806,7 @@ impl App {
         painter.galley(egui::pos2(x, rect.center().y - 15.0), name, p.text);
         painter.galley(egui::pos2(x, rect.center().y + 2.0), sub_galley, p.muted);
         // Tools, right to left.
-        let mut tool_x = rect.right() - 13.0;
+        let mut tool_x = rect.right() - 18.0;
         let mut tool =
             |ui: &mut Ui, icon: &str, size: f32, tip: &str, danger: bool, enabled: bool| -> bool {
                 tool_x -= 26.0;
@@ -906,15 +886,14 @@ impl App {
             let badge = item.kind.label();
             let galley =
                 ui.painter()
-                    .layout_no_wrap(badge.to_string(), font(9.0, Weight::Regular), p.muted);
+                    .layout_no_wrap(badge.to_string(), font(10.0, Weight::Medium), p.text);
             let r = Rect::from_min_size(
-                egui::pos2(tool_x - galley.size().x - 22.0, rect.center().y - 9.0),
-                Vec2::new(galley.size().x + 12.0, 18.0),
+                egui::pos2(tool_x - galley.size().x - 28.0, rect.center().y - 11.0),
+                Vec2::new(galley.size().x + 18.0, 22.0),
             );
+            ui.painter().rect_filled(r, 11, p.bg);
             ui.painter()
-                .rect_stroke(r, 4, Stroke::new(1.0, p.line), StrokeKind::Inside);
-            ui.painter()
-                .galley(r.center() - galley.size() / 2.0, galley, p.muted);
+                .galley(r.center() - galley.size() / 2.0, galley, p.text);
         }
         let id = item.id.clone();
         match action {
@@ -989,8 +968,9 @@ impl App {
             .collect();
         ui.horizontal(|ui| {
             let mut search = self.search.clone();
-            ui.allocate_ui(Vec2::new(360.0, 36.0), |ui| {
-                widgets::text_field(ui, "action-search", &mut search, "Знайти дію…", 360.0);
+            ui.spacing_mut().item_spacing.x = 14.0;
+            ui.allocate_ui(Vec2::new(380.0, 42.0), |ui| {
+                widgets::search_pill(ui, "action-search", &mut search, "Знайти дію…", 380.0);
             });
             self.search = search;
             ui.label(text(
@@ -1002,9 +982,9 @@ impl App {
         });
         ui.add_space(16.0);
         egui::Frame::new()
-            .stroke(Stroke::new(1.0, p.line))
-            .corner_radius(10)
-            .fill(p.bg)
+            .corner_radius(R_TILE)
+            .fill(p.panel)
+            .inner_margin(egui::Margin::symmetric(0, 8))
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.spacing_mut().item_spacing.y = 0.0;
@@ -1040,31 +1020,31 @@ impl App {
         );
         let runtime = self.shared.runtime();
         let s = self.settings.clone();
-        ui.allocate_ui(Vec2::new(ui.available_width().min(820.0), 0.0), |ui| {
+        ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             ui.spacing_mut().item_spacing.y = 20.0;
             section(ui, &p, None, |ui| {
+                ui.add_space(22.0);
                 ui.horizontal(|ui| {
-                    ui.add_space(22.0);
+                    ui.add_space(26.0);
                     let (diagram, _) = ui.allocate_exact_size(Vec2::new(70.0, 105.0), Sense::hover());
-                    ui.painter().rect(diagram, 32, p.subtle, Stroke::new(1.0, p.line_strong), StrokeKind::Inside);
+                    ui.painter().rect(diagram, 32, p.bg, Stroke::new(1.0, p.line_strong), StrokeKind::Inside);
                     ui.painter().hline(diagram.x_range(), diagram.top() + 38.0, Stroke::new(1.0, p.line_strong));
                     ui.painter().vline(diagram.center().x, diagram.top()..=diagram.top() + 38.0, Stroke::new(1.0, p.line_strong));
                     // Mouse 5 (forward) is the upper side button, Mouse 4 (back) the lower one.
                     for (button, y) in [(5u8, 44.0), (4u8, 64.0)] {
                         let r = Rect::from_min_size(egui::pos2(diagram.left() - 4.0, diagram.top() + y), Vec2::new(6.0, 16.0));
-                        ui.painter().rect_filled(r, 3, if s.trigger_button == button { p.text } else { p.line_strong });
+                        ui.painter().rect_filled(r, 3, if s.trigger_button == button { p.accent_ink() } else { p.line_strong });
                     }
                     ui.add_space(20.0);
                     ui.vertical(|ui| {
-                        ui.add_space(20.0);
-                        ui.label(text("Виклик колеса мишею", 15.0, Weight::Medium, p.text));
+                        ui.add_space(12.0);
+                        ui.label(text("Виклик колеса мишею", 16.0, Weight::Semibold, p.text));
                         ui.label(text("Стандартні бічні кнопки Mouse 4 та Mouse 5.", 12.0, Weight::Regular, p.muted));
                         ui.add_space(6.0);
+                        // The status chip: pulse while the hook is live, steel otherwise.
                         let on = s.enabled && runtime.hook_ready;
-                        egui::Frame::new().fill(if on { p.green.gamma_multiply(0.12) } else { p.subtle }).stroke(Stroke::new(1.0, if on { p.green.gamma_multiply(0.25) } else { p.line }))
-                            .corner_radius(5).inner_margin(egui::Margin::symmetric(8, 4)).show(ui, |ui| {
-                                ui.horizontal(|ui| { let (r, _) = ui.allocate_exact_size(Vec2::splat(6.0), Sense::hover()); ui.painter().circle_filled(r.center(), 3.0, if on { p.green } else { p.faint }); ui.label(text(status_label(&s, &runtime), 10.0, Weight::Regular, if on { p.green } else { p.muted })); });
-                            });
+                        let (fill, ink) = if on { (p.green, p.on_accent) } else { (p.active, p.text) };
+                        super::theme::chip(ui, status_label(&s, &runtime), fill, ink, true);
                     });
                 });
                 ui.add_space(20.0);
@@ -1162,7 +1142,7 @@ impl App {
             |_, _| {},
         );
         let s = self.settings.clone();
-        ui.allocate_ui(Vec2::new(ui.available_width().min(820.0), 0.0), |ui| {
+        ui.allocate_ui(Vec2::new(ui.available_width(), 0.0), |ui| {
             ui.spacing_mut().item_spacing.y = 20.0;
             section(ui, &p, Some(("Зовнішній вигляд", "Тема, розмір колеса й анімації.")), |ui| {
                 setting_row(ui, "Тема", "Застосовується до редактора й колеса.", |ui| {
@@ -1202,23 +1182,35 @@ impl App {
                 let (rect, response) =
                     ui.allocate_exact_size(Vec2::new(190.0, 20.0), Sense::click_and_drag());
                 let t = ((value - 60.0) / 90.0).clamp(0.0, 1.0);
+                // The system's range: a pulse fill on a steel track, a paper dot ringed in night and paper.
                 let track =
-                    Rect::from_center_size(rect.center(), Vec2::new(rect.width() - 12.0, 4.0));
-                ui.painter().rect_filled(track, 2, p.active);
+                    Rect::from_center_size(rect.center(), Vec2::new(rect.width() - 20.0, 8.0));
+                ui.painter().rect_filled(track, 4, p.active);
                 ui.painter().rect_filled(
                     Rect::from_min_max(
                         track.min,
                         egui::pos2(track.left() + track.width() * t, track.bottom()),
                     ),
-                    2,
-                    p.text,
+                    4,
+                    p.green,
                 );
+                let knob = egui::pos2(track.left() + track.width() * t, rect.center().y);
+                let grow = if response.dragged() { 1.0 } else { 0.0 };
                 ui.painter().circle(
-                    egui::pos2(track.left() + track.width() * t, rect.center().y),
-                    7.0,
-                    p.bg,
-                    Stroke::new(1.5, p.text),
+                    knob,
+                    8.5 + grow,
+                    p.on_accent,
+                    Stroke::new(1.5, if p.dark { p.text } else { p.on_accent }),
                 );
+                ui.painter().circle_filled(
+                    knob,
+                    4.5 + grow,
+                    if p.dark { p.text } else { Color32::WHITE },
+                );
+                if response.has_focus() {
+                    ui.painter()
+                        .circle_stroke(knob, 13.0, Stroke::new(2.0, p.focus));
+                }
                 if let Some(pos) = response.interact_pointer_pos() {
                     value = (60.0
                         + ((pos.x - track.left()) / track.width()).clamp(0.0, 1.0) * 90.0)
@@ -1303,11 +1295,14 @@ impl App {
             Some(("Оновлення", "Нові версії Orbit з GitHub.")),
             |ui| {
                 let top = ui.cursor().top();
-                ui.painter()
-                    .hline(ui.max_rect().x_range(), top, Stroke::new(1.0, p.line));
+                ui.painter().hline(
+                    ui.max_rect().x_range().shrink(22.0),
+                    top,
+                    Stroke::new(1.0, p.line),
+                );
                 ui.add_space(16.0);
                 ui.horizontal(|ui| {
-                    ui.add_space(20.0);
+                    ui.add_space(22.0);
                     ui.vertical(|ui| {
                         ui.set_width(ui.available_width() - 330.0);
                         ui.label(text(
@@ -1331,14 +1326,17 @@ impl App {
                         );
                         if let Phase::Downloading(pct) = phase {
                             let (r, _) = ui.allocate_exact_size(
-                                Vec2::new(ui.available_width().min(260.0), 4.0),
+                                Vec2::new(ui.available_width().min(260.0), 8.0),
                                 Sense::hover(),
                             );
-                            ui.painter().rect_filled(r, 2, p.active);
+                            ui.painter().rect_filled(r, 4, p.active);
                             ui.painter().rect_filled(
-                                Rect::from_min_size(r.min, Vec2::new(r.width() * pct / 100.0, 4.0)),
-                                2,
-                                p.text,
+                                Rect::from_min_size(
+                                    r.min,
+                                    Vec2::new((r.width() * pct / 100.0).max(8.0), 8.0),
+                                ),
+                                4,
+                                p.green,
                             );
                             ui.ctx()
                                 .request_repaint_after(std::time::Duration::from_millis(200));
@@ -1396,11 +1394,14 @@ impl App {
                 });
                 ui.add_space(16.0);
                 let y = ui.cursor().top();
-                ui.painter()
-                    .hline(ui.max_rect().x_range(), y, Stroke::new(1.0, p.line));
+                ui.painter().hline(
+                    ui.max_rect().x_range().shrink(22.0),
+                    y,
+                    Stroke::new(1.0, p.line),
+                );
                 ui.horizontal(|ui| {
-                    ui.set_height(44.0);
-                    ui.add_space(20.0);
+                    ui.set_height(48.0);
+                    ui.add_space(22.0);
                     ui.label(text(
                         "Меню та налаштування зберігаються.",
                         11.0,
@@ -1463,10 +1464,9 @@ fn clip(
 
 pub fn info_box(ui: &mut Ui, p: &Palette, message: &str) {
     egui::Frame::new()
-        .stroke(Stroke::new(1.0, p.line))
-        .corner_radius(7)
+        .corner_radius(18)
         .fill(p.panel)
-        .inner_margin(egui::Margin::symmetric(17, 14))
+        .inner_margin(egui::Margin::symmetric(20, 15))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_top(|ui| {

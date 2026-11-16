@@ -1,7 +1,7 @@
 //! Dialogs: new/rename menu, delete, import, notices, and the add/edit action dialog with its pickers.
 
 use super::item_icon::{IconSource, paint_item_icon};
-use super::theme::{Palette, Weight, font, paint_icon, text};
+use super::theme::{Palette, R_FIELD, Weight, caps, font, paint_icon, text};
 use super::widgets::{self, Button, icon_button, text_field};
 use crate::app::App;
 use crate::catalog::AppEntry;
@@ -73,17 +73,17 @@ fn modal<R>(
     let mut clicked = None;
     let mut close = false;
     let response = egui::Modal::new(egui::Id::unique(id))
-        .backdrop_color(Color32::from_black_alpha(153))
+        .backdrop_color(Color32::from_rgba_unmultiplied(9, 10, 10, 190))
         .frame(
             egui::Frame::new()
-                .fill(p.bg)
-                .stroke(Stroke::new(1.0, p.line_strong))
-                .corner_radius(12)
+                .fill(p.panel)
+                .stroke(Stroke::new(1.0, p.line))
+                .corner_radius(28)
                 .shadow(egui::Shadow {
-                    offset: [0, 12],
-                    blur: 40,
+                    offset: [0, 24],
+                    blur: 64,
                     spread: 0,
-                    color: Color32::from_black_alpha(100),
+                    color: Color32::from_black_alpha(if p.dark { 190 } else { 60 }),
                 }),
         )
         .show(ctx, |ui| {
@@ -92,7 +92,7 @@ fn modal<R>(
             ui.horizontal(|ui| {
                 ui.set_height(60.0);
                 ui.add_space(23.0);
-                ui.label(text(title, 15.0, Weight::Medium, p.text));
+                ui.label(text(title, 18.0, Weight::Semibold, p.text));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add_space(16.0);
                     if icon_button(ui, "close", 18.0, "Закрити", false, true).clicked() {
@@ -100,18 +100,18 @@ fn modal<R>(
                     }
                 });
             });
-            ui.painter().hline(
-                ui.max_rect().x_range(),
-                ui.cursor().top(),
-                Stroke::new(1.0, p.line),
-            );
             let max_height = ui.ctx().content_rect().height() * 0.9 - 140.0;
             let result = egui::ScrollArea::vertical()
                 .max_height(max_height)
                 .auto_shrink([false, true])
                 .show(ui, |ui| {
                     egui::Frame::new()
-                        .inner_margin(egui::Margin::symmetric(23, 21))
+                        .inner_margin(egui::Margin {
+                            left: 23,
+                            right: 23,
+                            top: 8,
+                            bottom: 14,
+                        })
                         .show(ui, |ui| {
                             ui.set_width(width - 46.0);
                             ui.spacing_mut().item_spacing.y = 8.0;
@@ -125,18 +125,6 @@ fn modal<R>(
                 egui::pos2(ui.max_rect().left(), top),
                 Vec2::new(width, 62.0),
             );
-            ui.painter().rect_filled(
-                footer_rect,
-                egui::CornerRadius {
-                    nw: 0,
-                    ne: 0,
-                    sw: 12,
-                    se: 12,
-                },
-                p.panel,
-            );
-            ui.painter()
-                .hline(footer_rect.x_range(), top, Stroke::new(1.0, p.line));
             ui.allocate_ui_with_layout(
                 footer_rect.size(),
                 egui::Layout::right_to_left(egui::Align::Center),
@@ -172,13 +160,14 @@ fn footer_button(ui: &mut Ui, b: &Btn) -> egui::Response {
         widgets::Kind::Primary => button.primary(),
         widgets::Kind::Danger => button.danger(),
         widgets::Kind::Ghost => button.ghost(),
+        widgets::Kind::Accent => button.accent(),
         widgets::Kind::Secondary => button,
     };
     button.show(ui)
 }
 
 fn label(ui: &mut Ui, p: &Palette, s: &str) {
-    ui.label(text(s, 12.0, Weight::Medium, p.text));
+    ui.label(caps(s, p.muted));
     ui.add_space(-1.0);
 }
 fn note(ui: &mut Ui, p: &Palette, s: &str) {
@@ -876,7 +865,7 @@ impl ActionDialog {
                 "action-target",
                 &mut self.draft.target,
                 hint,
-                if browse.is_some() { 360.0 } else { 444.0 },
+                if browse.is_some() { 346.0 } else { 444.0 },
             );
             if browse.is_some() && Button::new("Огляд…").show(ui).clicked() {
                 clicked = true;
@@ -888,8 +877,8 @@ impl ActionDialog {
 
     fn args_field(&mut self, ui: &mut Ui, p: &Palette, disabled: bool, hint_text: &str) {
         ui.horizontal(|ui| {
-            ui.label(text("Аргументи", 12.0, Weight::Medium, p.text));
-            ui.label(text("· необов’язково", 12.0, Weight::Regular, p.muted));
+            ui.label(caps("Аргументи", p.muted));
+            ui.label(text("· необов’язково", 11.0, Weight::Regular, p.faint));
         });
         ui.add_enabled_ui(!disabled, |ui| {
             text_field(
@@ -978,10 +967,9 @@ impl ActionDialog {
             ui.add_space(8.0);
             if !self.draft.target.is_empty() && !adding {
                 egui::Frame::new()
-                    .stroke(Stroke::new(1.0, p.line))
-                    .corner_radius(6)
-                    .fill(p.panel)
-                    .inner_margin(egui::Margin::symmetric(10, 9))
+                    .corner_radius(R_FIELD)
+                    .fill(p.bg)
+                    .inner_margin(egui::Margin::symmetric(12, 10))
                     .show(ui, |ui| {
                         ui.set_width(ui.available_width());
                         ui.horizontal(|ui| {
@@ -1078,12 +1066,12 @@ impl ActionDialog {
         let before = self.query.clone();
         let mut refresh = false;
         egui::Frame::new()
-            .stroke(Stroke::new(1.0, p.line_strong))
-            .corner_radius(6)
+            .stroke(Stroke::new(1.0, p.line))
+            .corner_radius(R_FIELD)
             .fill(p.bg)
             .inner_margin(egui::Margin {
-                left: 10,
-                right: 4,
+                left: 14,
+                right: 6,
                 top: 3,
                 bottom: 3,
             })
@@ -1542,12 +1530,12 @@ impl ActionDialog {
             })
             .unwrap_or_default();
         egui::Frame::new()
-            .stroke(Stroke::new(1.0, p.line_strong))
-            .corner_radius(6)
+            .stroke(Stroke::new(1.0, p.line))
+            .corner_radius(R_FIELD)
             .fill(p.bg)
             .inner_margin(egui::Margin {
-                left: 10,
-                right: 4,
+                left: 14,
+                right: 6,
                 top: 3,
                 bottom: 3,
             })
@@ -1713,18 +1701,17 @@ impl ActionDialog {
                 );
                 let (rect, response) =
                     ui.allocate_exact_size(Vec2::new(galley.size().x + 20.0, 26.0), Sense::click());
-                ui.painter().rect(
+                ui.painter().rect_filled(
                     rect,
                     13,
-                    if response.hovered() { p.hover } else { p.bg },
-                    Stroke::new(1.0, p.line),
-                    StrokeKind::Inside,
+                    if response.hovered() {
+                        widgets::mix(p.active, p.text, 0.12)
+                    } else {
+                        p.active
+                    },
                 );
-                ui.painter().galley(
-                    rect.center() - galley.size() / 2.0,
-                    galley,
-                    if response.hovered() { p.text } else { p.muted },
-                );
+                ui.painter()
+                    .galley(rect.center() - galley.size() / 2.0, galley, p.text);
                 if response
                     .on_hover_cursor(egui::CursorIcon::PointingHand)
                     .clicked()
@@ -1794,8 +1781,8 @@ impl ActionDialog {
             return;
         }
         ui.horizontal(|ui| {
-            ui.label(text("Перенести в групу", 12.0, Weight::Medium, p.text));
-            ui.label(text("· необов’язково", 12.0, Weight::Regular, p.muted));
+            ui.label(caps("Перенести в групу", p.muted));
+            ui.label(text("· необов’язково", 11.0, Weight::Regular, p.faint));
         });
         let width = (ui.available_width() - 18.0) / COLUMNS as f32;
         for chunk in movable.chunks(COLUMNS) {
@@ -2059,20 +2046,25 @@ fn tile(
 ) -> egui::Response {
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
     let hovered = response.hovered();
-    let (fill, stroke) = if active {
-        (p.subtle, p.text)
+    // Night tiles on the graphite dialog; the chosen one turns steel with a paper ring.
+    let radius = R_FIELD.min((size.y / 2.0) as u8);
+    let fill = if active {
+        p.active
     } else if hovered {
-        (p.hover, p.line_strong)
+        p.hover
     } else {
-        (p.bg, p.line)
+        p.bg
     };
-    ui.painter()
-        .rect(rect, 6, fill, Stroke::new(1.0, stroke), StrokeKind::Inside);
+    ui.painter().rect_filled(rect, radius, fill);
+    if active {
+        ui.painter()
+            .rect_stroke(rect, radius, Stroke::new(1.5, p.text), StrokeKind::Inside);
+    }
     if focused {
         ui.painter().rect_stroke(
-            rect.expand(2.0),
-            8,
-            Stroke::new(1.5, p.text),
+            rect.expand(3.0),
+            radius + 3,
+            Stroke::new(2.0, p.focus),
             StrokeKind::Outside,
         );
     }
@@ -2082,18 +2074,14 @@ fn tile(
 
 /// The tick box in a tile's corner. Returns true when the pointer is on it.
 fn check(ui: &Ui, p: &Palette, rect: Rect, on: bool) -> bool {
-    let r = Rect::from_min_size(rect.right_top() + Vec2::new(-22.0, 6.0), Vec2::splat(16.0));
+    let r = Rect::from_min_size(rect.right_top() + Vec2::new(-25.0, 7.0), Vec2::splat(18.0));
     let hovered = ui.rect_contains_pointer(r);
     if on || hovered || ui.rect_contains_pointer(rect) {
-        ui.painter().rect(
-            r,
-            4,
-            if on { p.text } else { p.bg },
-            Stroke::new(1.0, if on { p.text } else { p.line_strong }),
-            StrokeKind::Inside,
-        );
+        let off = if hovered { p.line_strong } else { p.panel };
+        ui.painter()
+            .rect_filled(r, 6, if on { p.primary } else { off });
         if on {
-            paint_icon(ui, r.shrink(2.0), "check", p.bg);
+            paint_icon(ui, r.shrink(3.0), "check", p.on_primary);
         }
     }
     hovered

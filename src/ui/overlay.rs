@@ -265,10 +265,20 @@ fn show(ui: &mut egui::Ui, shared: &Shared) {
             appear: 0.35 + 0.65 * eased,
         };
         // A soft shadow under the ring.
+        // Stacked translucent discs fade out past the rim, like a blurred drop shadow.
+        let rim = rect.width() * 207.0 / 480.0;
+        for layer in 0..12 {
+            ui.painter().circle_filled(
+                rect.center() + Vec2::new(0.0, 8.0),
+                rim - 6.0 + layer as f32 * 3.0,
+                egui::Color32::from_black_alpha((7.0 * eased) as u8),
+            );
+        }
+        // A translucent night disc keeps the hub readable over busy windows.
         ui.painter().circle_filled(
-            rect.center() + Vec2::new(0.0, 7.0),
-            0.45 * rect.width(),
-            egui::Color32::from_black_alpha(40),
+            rect.center(),
+            rect.width() * 98.0 / 480.0,
+            p.bg.gamma_multiply(0.7 * eased),
         );
         wheel::paint(ui, rect, &view, &p, &shared.icons, None);
         if appear < 1.0 {

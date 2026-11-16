@@ -96,13 +96,9 @@ pub fn paint(
     let overlay = view.style == Style::Overlay;
     let alpha = view.appear;
     let fade = |c: Color32| c.gamma_multiply(alpha);
-    // Dashed guide circle.
-    let guide = if overlay {
-        p.line_strong.gamma_multiply(0.3)
-    } else {
-        p.line_strong.gamma_multiply(0.6)
-    };
-    for i in 0..90 {
+    // Dashed guide circle: only on the editor's stage, the real wheel floats clean over the desktop.
+    let guide = p.line_strong.gamma_multiply(0.6);
+    for i in 0..if overlay { 0 } else { 90 } {
         let a0 = i as f32 / 90.0 * std::f32::consts::TAU;
         let a1 = a0 + std::f32::consts::TAU / 90.0 * 0.25;
         painter.line_segment(
@@ -128,24 +124,39 @@ pub fn paint(
         let is_source = id.is_some() && drag.source.as_deref() == id;
         let hot = !overlay && hovered == Some(if is_add { Hit::Add } else { Hit::Item(index) });
         let (outer, inner) = geometry::sector_outline(index, g.count, 92.0, 207.0, 6.0, 48);
-        let mut fill = if selected || hot { p.active } else { p.panel };
-        let mut stroke = if selected {
-            if overlay { p.text } else { p.muted }
+        // Graphite tiles; the selected one is inverted (paper tile, night content), the "+" slot is a night tile.
+        let mut fill = if selected {
+            p.primary
+        } else if hot {
+            p.hover
+        } else if is_add {
+            p.bg
         } else {
+            p.panel
+        };
+        let mut stroke = if selected {
+            p.primary
+        } else if is_add {
             p.line_strong
+        } else {
+            p.line
         };
         if is_target {
-            stroke = p.text;
+            stroke = p.accent_ink();
             fill = p.active;
         }
         if is_source {
             fill = fill.gamma_multiply(0.4);
         }
+        // Sectors are tiles: their four corners are rounded like every other surface of the system.
+        let outer: Vec<Pos2> = outer.iter().map(|q| g.at(*q)).collect();
+        let inner: Vec<Pos2> = inner.iter().map(|q| g.at(*q)).collect();
+        let (outer, inner) = rounded_sector(&outer, &inner, 11.0 * s);
         let mut mesh = Mesh::default();
         for (o, i) in outer.iter().zip(inner.iter()) {
             let base = mesh.vertices.len() as u32;
-            mesh.colored_vertex(g.at(*o), fade(fill));
-            mesh.colored_vertex(g.at(*i), fade(fill));
+            mesh.colored_vertex(*o, fade(fill));
+            mesh.colored_vertex(*i, fade(fill));
             if base >= 2 {
                 mesh.add_triangle(base - 2, base - 1, base);
                 mesh.add_triangle(base - 1, base + 1, base);
@@ -154,23 +165,27 @@ pub fn paint(
         painter.add(mesh);
         let outline: Vec<Pos2> = outer
             .iter()
-            .map(|q| g.at(*q))
-            .chain(inner.iter().rev().map(|q| g.at(*q)))
+            .copied()
+            .chain(inner[1..inner.len() - 1].iter().rev().copied())
             .collect();
-        let width = if is_target {
-            1.5
-        } else if overlay {
-            1.0
-        } else {
-            0.8
-        };
+        // A plain tile is stroked in its own colour, which only smooths its edge.
+        if !is_target && !is_add && !selected {
+            stroke = fill;
+        }
+        let width = if is_target { 2.0 } else { 1.0 };
         painter.add(PathShape::closed_line(
             outline,
             PathStroke::new(width, fade(stroke)),
         ));
         // Icon and label.
         let center = g.slot_center(index);
-        let color = if selected || hot { p.text } else { p.muted };
+        let color = if selected && !is_target {
+            p.on_primary
+        } else if hot || is_target {
+            p.text
+        } else {
+            p.muted
+        };
         let color = fade(if is_source {
             color.gamma_multiply(0.4)
         } else {
@@ -209,8 +224,8 @@ pub fn paint(
                     icon_rect.right_bottom() - Vec2::splat(2.0),
                     Vec2::splat(14.0),
                 );
-                painter.circle(badge.center(), 7.0, p.bg, Stroke::new(1.0, p.line_strong));
-                paint_icon(ui, badge.shrink(2.0), "plus", color);
+                painter.circle_filled(badge.center(), 7.0, fade(p.green));
+                paint_icon(ui, badge.shrink(2.5), "plus", fade(p.on_accent));
             } else {
                 paint_icon(
                     ui,
@@ -230,32 +245,21 @@ pub fn paint(
                     Align2::CENTER_CENTER,
                     "···",
                     font(13.0 * s.clamp(0.7, 1.0), Weight::Regular),
-                    fade(p.faint),
+                    if selected {
+                        color.gamma_multiply(0.6)
+                    } else {
+                        fade(p.faint)
+                    },
                 );
             }
         }
         let max_width =
             (geometry::label_width(geometry::slot_angle(index, g.count), g.count).min(84.0) * s)
                 .max(30.0);
-        let galley = ui.fonts_mut(|f| {
-            f.layout(
-                label.to_string(),
-                font(label_size, Weight::Regular),
-                color,
-                max_width,
-            )
-        });
-        // Labels are one line; longer names end with an ellipsis like the stylesheet's text-overflow.
-        let galley = if galley.rows.len() > 1 {
-            ellipsize(ui, label, label_size, color, max_width)
-        } else {
-            galley
-        };
+        // Labels wrap to two centered lines before they are cut with an ellipsis.
+        let galley = label_galley(ui, label, label_size, color, max_width);
         painter.galley(
-            Pos2::new(
-                center.x - galley.size().x / 2.0,
-                icon_rect.bottom() + 5.0 * s,
-            ),
+            Pos2::new(center.x, icon_rect.bottom() + 5.0 * s),
             galley,
             color,
         );
@@ -265,11 +269,21 @@ pub fn paint(
     let center_state = drag.center.clone();
     let center_hot = !overlay && hovered == Some(Hit::Center) && view.back;
     let (fill, stroke) = match &center_state {
-        Some(None) => (p.active, p.text),
-        Some(Some(_)) => (p.subtle, p.line_strong),
-        None => (if center_hot { p.subtle } else { p.bg }, p.line_strong),
+        Some(None) => (p.active, p.accent_ink()),
+        Some(Some(_)) => (p.panel, p.line_strong),
+        None => (if center_hot { p.hover } else { p.bg }, p.line),
     };
-    painter.circle(g.center, radius, fade(fill), Stroke::new(1.0, fade(stroke)));
+    let ring = if matches!(center_state, Some(None)) {
+        2.0
+    } else {
+        1.0
+    };
+    painter.circle(
+        g.center,
+        radius,
+        fade(fill),
+        Stroke::new(ring, fade(stroke)),
+    );
     let icon_size = if view.back { 24.0 } else { 30.0 } * s.clamp(0.6, 1.3);
     paint_icon(
         ui,
@@ -315,6 +329,127 @@ pub fn paint(
         );
     }
     g
+}
+
+/// Point at arc length `d` along a polyline.
+fn along(points: &[Pos2], d: f32) -> Pos2 {
+    let mut left = d;
+    for pair in points.windows(2) {
+        let step = (pair[1] - pair[0]).length();
+        if left <= step && step > 0.0 {
+            return pair[0] + (pair[1] - pair[0]) * (left / step);
+        }
+        left -= step;
+    }
+    *points.last().unwrap_or(&Pos2::ZERO)
+}
+
+/// Rounds the four corners of an annular sector. Returns its outer and inner rails: equally long point
+/// lists that both run from the middle of one radial side to the middle of the other.
+fn rounded_sector(outer: &[Pos2], inner: &[Pos2], radius: f32) -> (Vec<Pos2>, Vec<Pos2>) {
+    const ARC: usize = 40;
+    const CORNER: usize = 7;
+    let length =
+        |points: &[Pos2]| -> f32 { points.windows(2).map(|p| (p[1] - p[0]).length()).sum() };
+    let (lo, li) = (outer[0], inner[0]);
+    let (ro, ri) = (outer[outer.len() - 1], inner[inner.len() - 1]);
+    let (outer_len, inner_len) = (length(outer), length(inner));
+    let r = radius
+        .min((lo - li).length() * 0.3)
+        .min(inner_len * 0.3)
+        .max(0.0);
+    let (down_left, down_right) = ((li - lo).normalized(), (ri - ro).normalized());
+    let corner = |rail: &mut Vec<Pos2>, a: Pos2, c: Pos2, b: Pos2| {
+        for j in 0..=CORNER {
+            let t = j as f32 / CORNER as f32;
+            let u = 1.0 - t;
+            rail.push(
+                (a.to_vec2() * (u * u) + c.to_vec2() * (2.0 * u * t) + b.to_vec2() * (t * t))
+                    .to_pos2(),
+            );
+        }
+    };
+    let rail = |arc: &[Pos2], len: f32, left: Pos2, right: Pos2, sign: f32| {
+        let mut rail = vec![li + (lo - li) * 0.5];
+        corner(&mut rail, left + down_left * r * sign, left, along(arc, r));
+        for j in 0..ARC {
+            rail.push(along(
+                arc,
+                r + (len - 2.0 * r) * j as f32 / (ARC - 1) as f32,
+            ));
+        }
+        corner(
+            &mut rail,
+            along(arc, len - r),
+            right,
+            right + down_right * r * sign,
+        );
+        rail.push(ri + (ro - ri) * 0.5);
+        rail
+    };
+    (
+        rail(outer, outer_len, lo, ro, 1.0),
+        rail(inner, inner_len, li, ri, -1.0),
+    )
+}
+
+/// A wheel label: up to two centered lines, the second ending with an ellipsis when it does not fit.
+fn label_galley(
+    ui: &Ui,
+    label: &str,
+    size: f32,
+    color: Color32,
+    max_width: f32,
+) -> std::sync::Arc<egui::Galley> {
+    // A word that is wider than the sector would be split mid-word; such labels stay on one line.
+    let widest_word = label
+        .split_whitespace()
+        .map(|word| {
+            ui.painter()
+                .layout_no_wrap(word.to_string(), font(size, Weight::Regular), color)
+                .size()
+                .x
+        })
+        .fold(0.0, f32::max);
+    // A word that is only a little too wide gets a slightly smaller type instead of being cut.
+    if widest_word > max_width && widest_word <= max_width * 1.35 {
+        return label_galley(
+            ui,
+            label,
+            size * max_width / widest_word * 0.98,
+            color,
+            max_width,
+        );
+    }
+    if widest_word > max_width {
+        let mut job = egui::text::LayoutJob::simple_singleline(
+            label.to_string(),
+            font(size, Weight::Regular),
+            color,
+        );
+        job.halign = egui::Align::Center;
+        job.wrap = egui::text::TextWrapping {
+            max_width,
+            max_rows: 1,
+            break_anywhere: true,
+            overflow_character: Some('…'),
+        };
+        return ui.fonts_mut(|f| f.layout_job(job));
+    }
+    let mut job = egui::text::LayoutJob::simple(
+        label.to_string(),
+        font(size, Weight::Regular),
+        color,
+        max_width,
+    );
+    job.halign = egui::Align::Center;
+    job.wrap = egui::text::TextWrapping {
+        max_width,
+        max_rows: 2,
+        break_anywhere: false,
+        overflow_character: Some('…'),
+    };
+    ui.fonts_mut(|f| f.layout_job(job))
 }
 
 fn ellipsize(
