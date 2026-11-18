@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-pub const REPOSITORY: &str = "Validolio11/Orbit";
+pub const REPOSITORY: &str = "Validolio11/Orbit-2";
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Debug, PartialEq)]

@@ -23,19 +23,30 @@ jobs:
           persist-credentials: false
       - name: Rust toolchain
         run: rustup update stable --no-self-update && rustup default stable
-      - run: cargo test --locked
-      - run: cargo build --release --locked
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Editor frontend
+        run: |
+          npm --prefix src-tauri/editor ci
+          npm --prefix src-tauri/editor run build
+      - run: npm --prefix src-tauri/editor test
+      - run: node --test
+        working-directory: src-tauri/ui
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml
       - name: Package
         shell: pwsh
         run: |
-          $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages[0].version
-          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME does not match Cargo.toml version $version." }
-          $p = Start-Process -FilePath target\release\orbit.exe -ArgumentList '--self-test' -Wait -PassThru
+          $version = (cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | ConvertFrom-Json).packages[0].version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME does not match src-tauri/Cargo.toml version $version." }
+          $exe = 'src-tauri\target\release\orbit-tauri.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw 'Self-test failed.' }
           New-Item -ItemType Directory -Force release | Out-Null
           # One executable: the portable copy, and the same file named as the installer (it installs itself under that name).
-          Copy-Item target\release\orbit.exe "release\Orbit-$version-windows-x64.exe"
-          Copy-Item target\release\orbit.exe "release\Orbit-Setup-$version.exe"
+          Copy-Item $exe "release\Orbit-$version-windows-x64.exe"
+          Copy-Item $exe "release\Orbit-Setup-$version.exe"
           Get-ChildItem release\*.exe | ForEach-Object { "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content -Encoding ascii release\SHA256SUMS.txt
           "ORBIT_VERSION=$version" | Out-File -Append $env:GITHUB_ENV
       - name: Installer smoke test
