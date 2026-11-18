@@ -161,9 +161,9 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
         <Button variant="ghost" size="sm" data-action="browse" onClick={() => { void browse(); }}><Icon name={fields.kind === 'folder' ? 'folder' : 'script'} />{fields.kind === 'folder' ? 'Обрати папку…' : 'Обрати файл…'}</Button></SectionHead>
         {fields.kind === 'folder'
           ? <FolderPicker selected={fields.target} onPick={(folder) => pickPath(folder.path, folder.name)} />
-          : <ScriptPicker selected={fields.target} onPick={(script) => pickPath(script.path, script.name)} />}
-        <div className="grid gap-2"><Label htmlFor="action-target">{fields.kind === 'folder' ? 'Шлях до папки' : 'Шлях до скрипту'}</Label>
-          <Input id="action-target" className="h-10" value={fields.target} maxLength={4096} placeholder={TARGET_HINT[fields.kind]} onChange={(event) => set({ target: event.target.value })} /></div></section>}
+          : <ScriptPicker selected={fields.target} onPick={(script) => pickPath(script.path, script.name)} />}</section>}
+      {(fields.kind === 'folder' || fields.kind === 'script') && <div className="grid gap-2"><Label htmlFor="action-target">{fields.kind === 'folder' ? 'Шлях до папки' : 'Шлях до скрипту'}</Label>
+        <Input id="action-target" className="h-10" value={fields.target} maxLength={4096} placeholder={TARGET_HINT[fields.kind]} onChange={(event) => set({ target: event.target.value })} /></div>}
       {fields.kind !== 'system' && <div className="grid gap-2"><Label htmlFor="action-name">{fields.kind === 'group' ? 'Назва групи' : 'Назва в колесі'}</Label>
         <Input ref={nameInput} id="action-name" className="h-10" value={fields.name} maxLength={100} placeholder={fields.kind === 'group' ? 'Нова група' : 'Наприклад, Браузер'} autoFocus={editing || fields.kind !== 'app'} onChange={(event) => set({ name: event.target.value })} />
         {picking && fields.target && <p className="truncate font-mono text-xs text-muted-foreground" title={fields.target}>{fields.target}</p>}</div>}
