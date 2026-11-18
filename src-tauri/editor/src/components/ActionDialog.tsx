@@ -145,7 +145,7 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
   const moreSummary = (text: string) => <summary><Icon name="chevron" className="size-3.5 transition-transform in-open:rotate-90" />{text}</summary>;
   const showUrl = () => { setMore(true); window.setTimeout(() => document.getElementById('action-target')?.focus(), 0); };
   return <form noValidate onSubmit={(event) => { event.preventDefault(); submit(); }} className="flex min-h-0 flex-1 flex-col">
-    <DialogHeader className="border-b px-6 py-4"><DialogTitle id="action-dialog-title">{editing ? 'Редагувати дію' : 'Додати дію'}</DialogTitle></DialogHeader>
+    <DialogHeader className="border-b px-6 py-4"><DialogTitle>{editing ? 'Редагувати дію' : 'Додати дію'}</DialogTitle></DialogHeader>
     <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
       <div role="radiogroup" id="action-kind" aria-label="Тип дії" className={TILE_GRID} onKeyDown={gridKeys(clickTile)}>
         {KINDS.map((kind) => <button key={kind} type="button" data-tile role="radio" tabIndex={fields.kind === kind ? 0 : -1} aria-checked={fields.kind === kind} aria-current={fields.kind === kind || undefined} data-kind={kind} disabled={editing && existing?.kind === 'group'} onClick={() => pickKind(kind)}

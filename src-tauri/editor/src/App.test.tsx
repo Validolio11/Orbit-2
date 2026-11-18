@@ -307,6 +307,18 @@ describe("React editor shell and native events", () => {
     expect((element("#action-target") as HTMLInputElement).value).toBe(String.raw`D:\Work`);
   });
 
+  it("names dialogs and points tabs only at panels that exist", async () => {
+    setup(); await mount();
+    for (const tab of document.querySelectorAll('[role="tab"]')) {
+      const panel = tab.getAttribute("aria-controls");
+      if (panel) expect(document.getElementById(panel), panel).not.toBeNull();
+    }
+    expect(document.querySelectorAll('[role="tab"][aria-controls]')).toHaveLength(1);
+    await click('[data-action="add-action"]');
+    const dialog = element('[role="dialog"]');
+    expect(document.getElementById(dialog.getAttribute("aria-labelledby") ?? "")?.textContent).toBe("Додати дію");
+  });
+
   it("tells the user when the installed-app list cannot be read instead of reporting no results", async () => {
     setup({ failCatalog: true }); await mount();
     await click('[data-action="add-action"]');

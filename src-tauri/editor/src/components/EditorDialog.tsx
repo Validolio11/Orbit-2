@@ -24,7 +24,7 @@ export function EditorDialog({ request, onClose, onCreate, onDelete }: {
         if (onCreate(name)) close();
       }} noValidate className="grid gap-4">
         <DialogHeader>
-          <DialogTitle id="dialog-title">{request.type === 'create' ? 'Створити меню' : 'Видалити дію?'}</DialogTitle>
+          <DialogTitle>{request.type === 'create' ? 'Створити меню' : 'Видалити дію?'}</DialogTitle>
           {request.type === 'create' && <DialogDescription>Нове меню з’явиться окремою вкладкою, і його можна вибрати колесом прокрутки.</DialogDescription>}
           {request.type === 'delete' && <DialogDescription>{request.entry.action.name} · буде видалено з меню «{request.entry.menu.name}»{request.entry.action.kind === 'group' ? ` разом із вкладеними діями (${request.entry.action.children.length})` : ''}.</DialogDescription>}
         </DialogHeader>
