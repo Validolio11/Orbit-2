@@ -4,7 +4,7 @@ import { errorMessage, invoke } from '../api';
 import { cn } from '../lib/utils';
 import { Icon } from './icons';
 import { Input } from './ui/input';
-import { gridKeys, TILE, TILE_GRID } from './tiles';
+import { gridKeys, TILE, TILE_GRID, TILE_LABEL } from './tiles';
 
 export type FolderEntry = { group: string; name: string; path: string; icon: string };
 export type ScriptEntry = { name: string; path: string; extension: string; folder: string };
@@ -39,9 +39,13 @@ function PathTile({ data, label, detail, icon, title, chosen, tabStop, onPick }:
   // Folder tiles carry one label and match the Windows-command tiles; script tiles add a detail line.
   return <li className="contents"><button type="button" data-tile {...data} aria-current={chosen || undefined} title={title} tabIndex={tabStop ? 0 : -1}
     className={cn(TILE, detail ? 'h-[5.5rem] gap-1.5' : 'h-[4.5rem] gap-1.5 leading-tight')} onClick={onPick}>
-    <Icon name={icon} className="size-6 flex-none text-muted-foreground" />
-    <span className="line-clamp-2 w-full leading-tight break-words">{label}</span>
-    {detail && <span className="w-full truncate text-[0.6875rem] leading-none font-normal text-muted-foreground">{detail}</span>}
+    <Icon name={icon} className="size-5 flex-none text-muted-foreground" />
+    {detail
+      // The name keeps room for two lines with the detail right under it, so icons still line up across a row.
+      ? <span className="flex min-h-[calc(2lh+0.375rem+0.6875rem)] w-full flex-col items-center gap-1.5 leading-tight">
+        <span className="line-clamp-2 w-full break-words">{label}</span>
+        <span className="w-full truncate text-[0.6875rem] leading-none font-normal text-muted-foreground">{detail}</span></span>
+      : <span className={TILE_LABEL}>{label}</span>}
     {chosen && <Check className="absolute top-1.5 right-1.5 size-3.5 text-brand" aria-label="Вибрано" />}</button></li>;
 }
 

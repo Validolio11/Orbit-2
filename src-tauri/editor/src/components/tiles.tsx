@@ -2,6 +2,8 @@ import type { KeyboardEvent, ReactNode } from 'react';
 
 // One tile look for every picker: bare icon over the label, the chosen one marked by the accent border.
 export const TILE = 'relative flex flex-col items-center justify-center gap-2 rounded-lg border px-1.5 text-center text-xs font-medium transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-[current=true]:border-brand aria-[current=true]:bg-brand/10 aria-[current=true]:text-foreground';
+/** Tile labels always reserve two lines, so icons in a row line up whether a label wraps or not (as in Explorer). */
+export const TILE_LABEL = 'line-clamp-2 min-h-[2lh] w-full leading-tight break-words';
 export const TILE_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2';
 
 export function SectionHead({ title, children }: { title: string; children?: ReactNode }) {

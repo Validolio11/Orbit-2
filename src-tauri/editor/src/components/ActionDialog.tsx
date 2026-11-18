@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { FolderPicker, ScriptPicker } from './PathPickers';
-import { columnsOf, gridKeys, SectionHead, TILE, TILE_GRID } from './tiles';
+import { columnsOf, gridKeys, SectionHead, TILE, TILE_GRID, TILE_LABEL } from './tiles';
 
 export type ActionDialogRequest = { mode: 'add' } | { mode: 'edit'; entry: ActionEntry };
 type Fields = { kind: Kind; name: string; target: string; args: string };
@@ -90,7 +90,7 @@ function InstalledApps({ selected, onPick, onBrowse, onUrl }: { selected: string
         return <li key={`${app.target}|${app.args}`} className="contents">
           <button type="button" data-tile data-index={index} tabIndex={index === active ? 0 : -1} data-installed={app.name} data-active={index === active} aria-current={chosen || undefined}
             className={cn(TILE, 'h-[5.5rem]', index === active && 'bg-accent')} onMouseEnter={() => setActive(index)} onClick={() => onPick(app)}>
-            <AppIcon target={app.target} /><span className="line-clamp-2 w-full leading-tight break-words">{app.name}</span>{chosen && <Check className="absolute top-1.5 right-1.5 size-3.5 text-brand" aria-label="Вибрано" />}</button></li>;
+            <AppIcon target={app.target} /><span className={TILE_LABEL}>{app.name}</span>{chosen && <Check className="absolute top-1.5 right-1.5 size-3.5 text-brand" aria-label="Вибрано" />}</button></li>;
       })}
       {!result.entries.length && <li className="col-span-full py-3 text-xs text-muted-foreground">{result.loading ? 'Шукаю встановлені програми…' : result.error ? 'Не вдалося прочитати список програм. Вкажіть шлях вручну.' : 'Нічого не знайдено. Вкажіть шлях вручну.'}</li>}
     </ul>
@@ -155,7 +155,7 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
       {fields.kind === 'system' && <section className="grid gap-3"><SectionHead title={sectionTitle} />
         <div id="action-system" role="radiogroup" aria-label="Команда Windows" className={TILE_GRID} onKeyDown={gridKeys(clickTile)}>
           {SYSTEM_ACTIONS.map(([id, label], index) => <button key={id} type="button" data-tile role="radio" tabIndex={fields.target === id || (index === 0 && !SYSTEM_ACTIONS.some(([known]) => known === fields.target)) ? 0 : -1} aria-checked={fields.target === id} aria-current={fields.target === id || undefined} data-system={id} className={cn(TILE, 'h-[4.5rem] gap-1.5 leading-tight')} onClick={() => pickSystem(id)}>
-            <Icon name={SYSTEM_ICONS[id] ?? 'system'} className="size-5" /><span className="line-clamp-2 w-full break-words">{label}</span></button>)}
+            <Icon name={SYSTEM_ICONS[id] ?? 'system'} className="size-5" /><span className={TILE_LABEL}>{label}</span></button>)}
         </div></section>}
       {(fields.kind === 'folder' || fields.kind === 'script') && <section className="grid gap-3"><SectionHead title={sectionTitle}>
         <Button variant="ghost" size="sm" data-action="browse" onClick={() => { void browse(); }}><Icon name={fields.kind === 'folder' ? 'folder' : 'script'} />{fields.kind === 'folder' ? 'Обрати папку…' : 'Обрати файл…'}</Button></SectionHead>
