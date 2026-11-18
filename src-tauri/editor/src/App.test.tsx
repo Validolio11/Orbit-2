@@ -46,7 +46,7 @@ afterEach(async () => {
   delete document.documentElement.dataset.reducedMotion;
 });
 
-function setup({ failFirstRead = false, deferSubscriptions = false, failFolders = false } = {}) {
+function setup({ failFirstRead = false, deferSubscriptions = false, failFolders = false, failCatalog = false } = {}) {
   let native = initialState(), reads = 0;
   const calls: Call[] = [], listeners = new Map<string, NativeListener>(), unsubscribed: string[] = [];
   const queued: AppEvent[] = [], resolveListeners: Array<() => void> = [];
@@ -67,7 +67,10 @@ function setup({ failFirstRead = false, deferSubscriptions = false, failFolders 
         emit("state:changed", structuredClone(native)); return structuredClone(native.settings);
       }
       if (command === "take_events") return queued.splice(0);
-      if (command === "catalog_search") return { loading: false, error: null, entries: [{ name: "Firefox", target: String.raw`C:\Apps\firefox.exe`, args: "" }] };
+      if (command === "catalog_search") {
+        if (failCatalog) throw new Error("Каталог недоступний.");
+        return { loading: false, error: null, entries: [{ name: "Firefox", target: String.raw`C:\Apps\firefox.exe`, args: "" }] };
+      }
       if (command === "list_folders") {
         if (failFolders) throw "Доступ заборонено.";
         return [
@@ -302,9 +305,17 @@ describe("React editor shell and native events", () => {
     expect((element("#action-target") as HTMLInputElement).value).toBe(String.raw`D:\Work`);
   });
 
+  it("tells the user when the installed-app list cannot be read instead of reporting no results", async () => {
+    setup({ failCatalog: true }); await mount();
+    await click('[data-action="add-action"]');
+    expect(element("#installed-apps").textContent).toContain("Не вдалося прочитати список програм");
+    expect(element("#installed-apps").textContent).not.toContain("Нічого не знайдено");
+  });
+
   it("recovers from a failed state read using retry without duplicating subscriptions", async () => {
     const env = setup({ failFirstRead: true }); await mount();
     expect(element("#workspace").textContent).toContain("Не вдалося завантажити Orbit");
+    expect(element("#workspace").textContent).not.toContain("Error:");
     await click('[data-action="retry"]');
     expect(element("#workspace").textContent).toContain("Програми, папки та команди");
     expect(env.calls.filter(({ command }) => command === "get_state")).toHaveLength(2);

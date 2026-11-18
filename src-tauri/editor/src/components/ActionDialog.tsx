@@ -1,7 +1,7 @@
 import { Check, Search } from 'lucide-react';
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../lib/utils';
-import { invoke, listen } from '../api';
+import { errorMessage, invoke, listen } from '../api';
 import { fileStem, KIND_NAMES, SYSTEM_ACTIONS } from '../editor-state';
 import type { Action, ActionEntry, Kind } from '../types';
 import { Icon } from './icons';
@@ -61,7 +61,7 @@ function InstalledApps({ selected, onPick, onBrowse, onUrl }: { selected: string
   useEffect(() => {
     let current = true;
     invoke('catalog_search', { query, limit: 100 }).then((view) => { if (current) { setResult({ entries: view?.entries ?? [], loading: view?.loading ?? false, error: view?.error ?? null }); setActive(0); } })
-      .catch(() => { if (current) setResult({ entries: [], loading: false, error: null }); });
+      .catch((failure) => { if (current) setResult({ entries: [], loading: false, error: errorMessage(failure) }); });
     return () => { current = false; };
   }, [query, reload]);
   useEffect(() => {
@@ -128,7 +128,7 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
     try {
       const path = fields.kind === 'folder' ? await invoke('pick_folder') : await invoke('pick_file', { kind: fields.kind === 'script' ? 'script' : 'app' });
       if (path) pickPath(path, fileStem(path));
-    } catch (failure) { setError(String(failure)); }
+    } catch (failure) { setError(errorMessage(failure)); }
   };
   const submit = () => {
     const name = fields.name.trim();

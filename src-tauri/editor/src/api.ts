@@ -42,6 +42,17 @@ export function invoke<C extends keyof Commands>(command: C, ...args: Commands[C
 export function listen<E extends keyof Events>(event: E, callback: (payload: Events[E]) => void): Promise<() => void> {
   return tauri().event.listen<Events[E]>(event, ({ payload }) => callback(payload));
 }
+/**
+ * Readable text for a failed command. Rust commands reject with a plain string; JS failures are `Error`s whose
+ * `String()` would add an English "Error:" prefix; some bridges reject with `{ message }`.
+ */
+export function errorMessage(failure: unknown): string {
+  const text = typeof failure === 'string' ? failure
+    : failure instanceof Error ? failure.message
+    : typeof (failure as { message?: unknown } | null)?.message === 'string' ? (failure as { message: string }).message
+    : '';
+  return text.trim() || 'Невідома помилка.';
+}
 export const getState = () => invoke('get_state');
 export const openWheelPreview = () => invoke('open_wheel_preview');
 export const closeWheel = () => invoke('close_wheel');

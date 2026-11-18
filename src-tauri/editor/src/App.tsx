@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { getState, invoke, openWheelPreview, windowCommand } from './api';
+import { errorMessage, getState, invoke, openWheelPreview, windowCommand } from './api';
 import { activeMenu, addAction, flattenActions, moveAction, moveOut, removeAction, updateAction } from './editor-state';
 import { useAppState } from './useAppState';
 import type { AppEvent, Page, Settings } from './types';
@@ -34,7 +34,7 @@ export default function App() {
   }, [toast, onPage]);
   const { snapshot, error, store, retry } = useAppState(onEvent);
   const patch = (next: Partial<Settings>) => { void store.patch(next); };
-  const run = async (action: () => Promise<unknown>) => { try { await action(); } catch (failure) { toast(String(failure), true); } };
+  const run = async (action: () => Promise<unknown>) => { try { await action(); } catch (failure) { toast(errorMessage(failure), true); } };
   useLayoutEffect(() => {
     if (focusPage.current) {
       focusPage.current = false;

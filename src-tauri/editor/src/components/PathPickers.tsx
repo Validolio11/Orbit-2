@@ -1,6 +1,6 @@
 import { Check, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { invoke } from '../api';
+import { errorMessage, invoke } from '../api';
 import { cn } from '../lib/utils';
 import { Icon } from './icons';
 import { Input } from './ui/input';
@@ -13,7 +13,6 @@ type Load<T> = { items: T[]; loading: boolean; error: string | null };
 const FOLDER_GROUPS: [string, string][] = [['quick', 'Швидкий доступ'], ['known', 'Стандартні папки'], ['drive', 'Диски']];
 /** Windows paths compare without case and without a trailing separator. */
 export const samePath = (a: string, b: string) => !!a.trim() && a.trim().replace(/[\\/]+$/u, '').toLowerCase() === b.trim().replace(/[\\/]+$/u, '').toLowerCase();
-const failure = (error: unknown) => (error instanceof Error ? error.message : String(error ?? '')) || 'Невідома помилка.';
 
 /** Native lists are optional: an older or failing backend falls back to manual entry instead of breaking the dialog. */
 function useNative<T>(read: () => Promise<T[] | null | undefined>, deps: unknown[] = []): Load<T> {
@@ -22,7 +21,7 @@ function useNative<T>(read: () => Promise<T[] | null | undefined>, deps: unknown
     let current = true;
     setState((previous) => ({ ...previous, loading: true, error: null }));
     read().then((items) => { if (current) setState({ items: Array.isArray(items) ? items : [], loading: false, error: null }); })
-      .catch((error) => { if (current) setState({ items: [], loading: false, error: failure(error) }); });
+      .catch((error) => { if (current) setState({ items: [], loading: false, error: errorMessage(error) }); });
     return () => { current = false; };
   }, deps);
   return state;

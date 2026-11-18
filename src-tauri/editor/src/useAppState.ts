@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { getState, invoke, listen } from './api';
+import { errorMessage, getState, invoke, listen } from './api';
 import { createSettingsStore } from './editor-state';
 import type { AppEvent, AppState } from './types';
 
@@ -14,7 +14,7 @@ export function useAppState(onEvent: (event: AppEvent) => void) {
   const [store] = useState(() => createSettingsStore({
     save: (settings) => invoke('save_settings', { settings }), refresh: getState,
     changed: (next) => { if (active.current) setSnapshot(next); },
-    failed: (failure) => { if (active.current) callback.current({ type: 'toast', message: String(failure), error: true }); },
+    failed: (failure) => { if (active.current) callback.current({ type: 'toast', message: errorMessage(failure), error: true }); },
   }));
   useEffect(() => {
     active.current = true;
@@ -22,7 +22,7 @@ export function useAppState(onEvent: (event: AppEvent) => void) {
     let eventQueue = Promise.resolve();
     const subscriptions = new Map<string, Promise<void>>(), unlisteners: (() => void)[] = [];
     const report = (failure: unknown) => {
-      if (!disposed) callback.current({ type: 'toast', message: String(failure), error: true });
+      if (!disposed) callback.current({ type: 'toast', message: errorMessage(failure), error: true });
     };
     async function subscribe<E extends Parameters<typeof listen>[0]>(name: E, handler: Parameters<typeof listen<E>>[1]) {
       if (!subscriptions.has(name)) {
@@ -61,7 +61,7 @@ export function useAppState(onEvent: (event: AppEvent) => void) {
         }
         await drainEvents();
       } catch (failure) {
-        if (!disposed) { setError(String(failure)); report(failure); }
+        if (!disposed) { setError(errorMessage(failure)); report(failure); }
       } finally { initializing = false; }
     }
     retryRef.current = initialize;
