@@ -1,0 +1,434 @@
+{
+ "wheel": [
+  "custom",
+  "six ring segments, wide gutters for 14-24px (traced from the owner-picked concept wheel-glyph-1)"
+ ],
+ "grid": [
+  "fill",
+  "squares-four"
+ ],
+ "mouse": [
+  "fill",
+  "mouse-simple"
+ ],
+ "settings": [
+  "fill",
+  "gear-six"
+ ],
+ "home": [
+  "fill",
+  "house"
+ ],
+ "plus": [
+  "bold",
+  "plus"
+ ],
+ "minus": [
+  "bold",
+  "minus"
+ ],
+ "close": [
+  "bold",
+  "x"
+ ],
+ "check": [
+  "bold",
+  "check"
+ ],
+ "chevron": [
+  "bold",
+  "caret-right"
+ ],
+ "down": [
+  "bold",
+  "caret-down"
+ ],
+ "back": [
+  "bold",
+  "arrow-left"
+ ],
+ "arrowUp": [
+  "bold",
+  "arrow-up"
+ ],
+ "arrowDown": [
+  "bold",
+  "arrow-down"
+ ],
+ "search": [
+  "bold",
+  "magnifying-glass"
+ ],
+ "refresh": [
+  "bold",
+  "arrows-clockwise"
+ ],
+ "external": [
+  "bold",
+  "arrow-up-right"
+ ],
+ "moveRoot": [
+  "bold",
+  "arrow-up-left"
+ ],
+ "drag": [
+  "bold",
+  "dots-six-vertical"
+ ],
+ "edit": [
+  "fill",
+  "pencil-simple"
+ ],
+ "copy": [
+  "fill",
+  "copy"
+ ],
+ "trash": [
+  "fill",
+  "trash"
+ ],
+ "import": [
+  "bold",
+  "download-simple"
+ ],
+ "export": [
+  "bold",
+  "upload-simple"
+ ],
+ "info": [
+  "fill",
+  "info"
+ ],
+ "lock": [
+  "fill",
+  "lock"
+ ],
+ "sliders": [
+  "fill",
+  "sliders-horizontal"
+ ],
+ "app": [
+  "fill",
+  "app-window"
+ ],
+ "folder": [
+  "fill",
+  "folder"
+ ],
+ "group": [
+  "fill",
+  "folders"
+ ],
+ "script": [
+  "fill",
+  "file-code"
+ ],
+ "system": [
+  "fill",
+  "desktop"
+ ],
+ "desktop": [
+  "fill",
+  "desktop"
+ ],
+ "windows": [
+  "fill",
+  "windows-logo"
+ ],
+ "browser": [
+  "fill",
+  "globe"
+ ],
+ "run": [
+  "fill",
+  "terminal-window"
+ ],
+ "screenshot": [
+  "fill",
+  "crop"
+ ],
+ "volume": [
+  "fill",
+  "speaker-high"
+ ],
+ "volumeMute": [
+  "fill",
+  "speaker-slash"
+ ],
+ "volumeUp": [
+  "fill",
+  "speaker-simple-high"
+ ],
+ "volumeDown": [
+  "fill",
+  "speaker-low"
+ ],
+ "tasks": [
+  "fill",
+  "chart-bar"
+ ],
+ "play": [
+  "fill",
+  "play"
+ ],
+ "pause": [
+  "fill",
+  "pause"
+ ],
+ "playPause": [
+  "fill",
+  "play-pause"
+ ],
+ "trackPrev": [
+  "fill",
+  "skip-back"
+ ],
+ "trackNext": [
+  "fill",
+  "skip-forward"
+ ],
+ "keyboard": [
+  "fill",
+  "keyboard"
+ ],
+ "clipboard": [
+  "fill",
+  "clipboard-text"
+ ],
+ "emoji": [
+  "fill",
+  "smiley"
+ ],
+ "mic": [
+  "fill",
+  "microphone"
+ ],
+ "bell": [
+  "fill",
+  "bell"
+ ],
+ "bluetooth": [
+  "fill",
+  "bluetooth"
+ ],
+ "calculator": [
+  "fill",
+  "calculator"
+ ],
+ "notepad": [
+  "fill",
+  "note-pencil"
+ ],
+ "image": [
+  "fill",
+  "image"
+ ],
+ "film": [
+  "fill",
+  "film-strip"
+ ],
+ "music": [
+  "fill",
+  "music-notes"
+ ],
+ "cloud": [
+  "fill",
+  "cloud"
+ ],
+ "drive": [
+  "fill",
+  "hard-drive"
+ ],
+ "briefcase": [
+  "fill",
+  "briefcase"
+ ],
+ "palette": [
+  "fill",
+  "palette"
+ ],
+ "gamepad": [
+  "fill",
+  "game-controller"
+ ],
+ "star": [
+  "fill",
+  "star"
+ ],
+ "heart": [
+  "fill",
+  "heart"
+ ],
+ "bookmark": [
+  "fill",
+  "bookmark-simple"
+ ],
+ "user": [
+  "fill",
+  "user"
+ ],
+ "users": [
+  "fill",
+  "users"
+ ],
+ "calendar": [
+  "fill",
+  "calendar-blank"
+ ],
+ "clock": [
+  "fill",
+  "clock"
+ ],
+ "mail": [
+  "fill",
+  "envelope-simple"
+ ],
+ "chat": [
+  "fill",
+  "chat-circle-dots"
+ ],
+ "phone": [
+  "fill",
+  "device-mobile"
+ ],
+ "layers": [
+  "fill",
+  "stack"
+ ],
+ "cube": [
+  "fill",
+  "cube"
+ ],
+ "camera": [
+  "fill",
+  "camera"
+ ],
+ "video": [
+  "fill",
+  "video-camera"
+ ],
+ "tv": [
+  "fill",
+  "television"
+ ],
+ "headphones": [
+  "fill",
+  "headphones"
+ ],
+ "trophy": [
+  "fill",
+  "trophy"
+ ],
+ "wifi": [
+  "fill",
+  "wifi-high"
+ ],
+ "map": [
+  "fill",
+  "map-pin"
+ ],
+ "sparkles": [
+  "fill",
+  "sparkle"
+ ],
+ "bot": [
+  "fill",
+  "robot"
+ ],
+ "cpu": [
+  "fill",
+  "cpu"
+ ],
+ "database": [
+  "fill",
+  "database"
+ ],
+ "server": [
+  "fill",
+  "hard-drives"
+ ],
+ "zap": [
+  "fill",
+  "lightning"
+ ],
+ "rocket": [
+  "fill",
+  "rocket-launch"
+ ],
+ "shield": [
+  "fill",
+  "shield-check"
+ ],
+ "key": [
+  "fill",
+  "key"
+ ],
+ "book": [
+  "fill",
+  "book"
+ ],
+ "graduation": [
+  "fill",
+  "graduation-cap"
+ ],
+ "chart": [
+  "fill",
+  "chart-line-up"
+ ],
+ "wallet": [
+  "fill",
+  "wallet"
+ ],
+ "cart": [
+  "fill",
+  "shopping-cart"
+ ],
+ "box": [
+  "fill",
+  "package"
+ ],
+ "printer": [
+  "fill",
+  "printer"
+ ],
+ "flask": [
+  "fill",
+  "flask"
+ ],
+ "leaf": [
+  "fill",
+  "leaf"
+ ],
+ "coffee": [
+  "fill",
+  "coffee"
+ ],
+ "gift": [
+  "fill",
+  "gift"
+ ],
+ "tag": [
+  "fill",
+  "tag"
+ ],
+ "sun": [
+  "fill",
+  "sun"
+ ],
+ "moon": [
+  "fill",
+  "moon"
+ ],
+ "orbit": [
+  "custom",
+  "five petals around a dot (traced from the owner-picked concept wheel-glyph-2): brand mark and app icon"
+ ],
+ "orbit-base": [
+  "custom",
+  "brand mark without the top petal (two-colour layer)"
+ ],
+ "orbit-accent": [
+  "custom",
+  "top petal of the brand mark (accent layer)"
+ ]
+}

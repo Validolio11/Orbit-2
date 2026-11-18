@@ -1,4 +1,4 @@
-name: Release Orbit 2
+name: Release Orbit
 on:
   push:
     tags: ['v*']
@@ -14,44 +14,55 @@ concurrency:
 jobs:
   windows-release:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - name: Rust toolchain
+        run: rustup update stable --no-self-update && rustup default stable
+      - uses: actions/setup-node@v5
         with:
-          node-version: 24
-          package-manager-cache: false
-      - run: npm ci
-      - run: npm test
-      - name: Native lifecycle tests
-        shell: powershell
-        run: ./scripts/test-native.ps1
-      - name: Updater transaction tests
-        shell: powershell
-        run: ./scripts/test-updater.ps1
-      - run: npm run release
-      - run: node scripts/smoke-packaged.cjs
-      - name: Build installer
-        shell: powershell
-        run: ./scripts/build-installer.ps1
-      - name: Installer smoke test
-        shell: powershell
+          node-version: 22
+      - name: Editor frontend
         run: |
-          $orbitReleaseVersion = node -p "require('./package.json').version"
-          $target = Join-Path $env:RUNNER_TEMP 'orbit-installer-test\Orbit'
-          $setup = Start-Process -FilePath "release\Orbit2-Setup-$orbitReleaseVersion.exe" -ArgumentList '/silent', '/nolaunch', "/dir=$target" -Wait -PassThru
+          npm --prefix src-tauri/editor ci
+          npm --prefix src-tauri/editor run build
+      - run: npm --prefix src-tauri/editor test
+      - run: node --test
+        working-directory: src-tauri/ui
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = (cargo metadata --no-deps --format-version 1 --manifest-path src-tauri/Cargo.toml | ConvertFrom-Json).packages[0].version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME does not match src-tauri/Cargo.toml version $version." }
+          $exe = 'src-tauri\target\release\orbit-tauri.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'Self-test failed.' }
+          New-Item -ItemType Directory -Force release | Out-Null
+          # One executable: the portable copy, and the same file named as the installer (it installs itself under that name).
+          Copy-Item $exe "release\Orbit-$version-windows-x64.exe"
+          Copy-Item $exe "release\Orbit-Setup-$version.exe"
+          Get-ChildItem release\*.exe | ForEach-Object { "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content -Encoding ascii release\SHA256SUMS.txt
+          "ORBIT_VERSION=$version" | Out-File -Append $env:GITHUB_ENV
+      - name: Installer smoke test
+        shell: pwsh
+        run: |
+          $setup = Start-Process -FilePath "release\Orbit-Setup-$env:ORBIT_VERSION.exe" -ArgumentList '--silent', '--nolaunch' -Wait -PassThru
           if ($setup.ExitCode -ne 0) { throw 'Installer failed.' }
-          if ((Get-Content -Raw (Join-Path $target 'orbit-release.json') | ConvertFrom-Json).version -ne $orbitReleaseVersion) { throw 'Installer installed the wrong version.' }
+          if (-not (Test-Path "$env:LOCALAPPDATA\Programs\Orbit\Orbit.exe")) { throw 'Orbit.exe was not installed.' }
+      # A pushed tag publishes its own release; "Run workflow" on main tags the current commit with the Cargo.toml version.
       - name: Publish release assets
+        if: github.ref_type == 'tag' || github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $orbitReleaseVersion = node -p "require('./package.json').version"
-          gh release create "v$orbitReleaseVersion" "release/Orbit2-$orbitReleaseVersion-win32-x64.zip" "release/Orbit2-Setup-$orbitReleaseVersion.exe" "release/SHA256SUMS.txt" --verify-tag --title "Orbit 2 $orbitReleaseVersion" --generate-notes --draft
+          $target = if ($env:GITHUB_REF_TYPE -eq 'tag') { @('--verify-tag') } else { @('--target', $env:GITHUB_SHA) }
+          gh release create "v$env:ORBIT_VERSION" "release/Orbit-$env:ORBIT_VERSION-windows-x64.exe" "release/Orbit-Setup-$env:ORBIT_VERSION.exe" "release/SHA256SUMS.txt" @target --title "Orbit $env:ORBIT_VERSION" --generate-notes --draft
           if ($LASTEXITCODE -ne 0) { throw 'Release upload failed.' }
-          gh release edit "v$orbitReleaseVersion" --draft=false --latest
+          gh release edit "v$env:ORBIT_VERSION" --draft=false --latest

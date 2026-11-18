@@ -1,0 +1,51 @@
+﻿html.wheel-page, .wheel-page body { width: 100%; height: 100%; overflow: hidden; background: transparent; }
+.wheel-page body { user-select: none; touch-action: none; }
+#wheel-content, #wheel, #wheel-images { position: absolute; inset: 0; width: 100%; height: 100%; }
+#wheel { overflow: visible; }
+#wheel-images { pointer-events: none; }
+#wheel-images img { position: absolute; }
+#wheel-images .bitmap-badge { position: absolute; overflow: visible; }
+#wheel-content { opacity: 0; }
+#wheel-content.is-visible { animation: wheel-appear 140ms ease-out both; }
+@keyframes wheel-appear { from { opacity: 0; } to { opacity: 1; } }
+.sector-surface { fill: var(--card); stroke: var(--border); stroke-width: 1; stroke-linejoin: round; }
+.sector { cursor: pointer; color: var(--muted-foreground); }
+.sector.is-add .sector-surface { stroke: var(--input); }
+.sector:hover .sector-surface, .sector.is-hot .sector-surface { fill: var(--secondary); stroke: var(--input); }
+.sector.is-selected { color: var(--brand-foreground); }
+.sector.is-selected .sector-surface { fill: var(--brand); stroke: var(--brand); }
+.sector.is-keyboard .sector-surface { stroke: var(--ring); stroke-width: 2; }
+/* The wheel draws its own focus stroke; the browser focus ring would box the hub in a square. */
+.wheel-page :focus, .wheel-page :focus-visible { outline: none !important; }
+.sector:focus-visible .sector-surface, .hub:focus-visible .hub-surface { stroke: var(--ring); stroke-width: 2; }
+.sector-label { fill: currentColor; text-anchor: middle; font-weight: 500; }
+.shortcut { fill: var(--muted-foreground); font-family: "Geist Mono", monospace; text-anchor: middle; }
+.sector.is-selected .shortcut { fill: currentColor; }
+.hold-progress { fill: none; stroke: var(--brand-foreground); stroke-linecap: round; pointer-events: none; }
+.hub { color: var(--foreground); }
+.hub[data-back="true"] { cursor: pointer; }
+.hub-surface { fill: var(--background); stroke: var(--border); stroke-width: 1; stroke-linejoin: round; }
+.hub-halo { fill: var(--card); fill-opacity: .75; }
+.hub[data-back="true"]:hover .hub-surface { fill: var(--accent); }
+.hub-title { fill: var(--foreground); text-anchor: middle; font-weight: 600; }
+.hub-detail, .empty-label { fill: var(--muted-foreground); text-anchor: middle; }
+.menu-dot { fill: var(--muted-foreground); }
+.menu-dot.is-current, .brand-accent { fill: var(--brand); }
+.brand-accent { color: var(--brand); }
+.group-pip { fill: var(--kind-group); }
+.pip-glyph { color: var(--kind-ink); }
+.add-pip { fill: var(--success); }
+.kind-holder { fill: var(--kind-color); }
+.kind-icon { color: var(--kind-ink); }
+.kind-app { --kind-color: var(--kind-app); }
+.kind-folder { --kind-color: var(--kind-folder); }
+.kind-script { --kind-color: var(--kind-script); }
+.kind-system { --kind-color: var(--kind-system); }
+.kind-group { --kind-color: var(--kind-group); }
+.empty-add { cursor: pointer; }
+.empty-add:focus-visible { outline: none; }
+.empty-add:hover .empty-label, .empty-add:focus-visible .empty-label { fill: var(--brand); }
+#wheel-status { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); max-width: calc(100% - 32px); margin: 0; padding: 8px 14px; background: var(--card); color: var(--destructive); font-size: 12px; text-align: center; }
+#wheel-content[aria-busy="true"] .sector { cursor: wait; }
+@media (prefers-reduced-motion: reduce) { #wheel-content.is-visible { animation: none; opacity: 1; } }
+:root[data-reduced-motion="true"] #wheel-content.is-visible { animation: none; opacity: 1; }

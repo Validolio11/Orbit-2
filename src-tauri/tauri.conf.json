@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Orbit",
+  "version": "3.0.0",
+  "identifier": "com.orbit.launcher",
+  "build": {
+    "frontendDist": "dist",
+    "beforeBuildCommand": "npm --prefix editor run build"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": { "active": false, "icon": ["../assets/orbit.ico", "../assets/orbit-256.png"] }
+}

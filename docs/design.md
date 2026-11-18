@@ -1,56 +1,44 @@
-# Orbit 2 · design direction
+# Orbit design system
 
-Orbit 2 keeps Orbit's Geist foundation (compact type, single-pixel borders, restrained surfaces, Geist and Geist Mono) and adds one controlled colour: a user-selected accent.
-
-- Accent: blue by default; violet, green, amber, rose and monochrome are offered in Settings → Appearance. The accent marks only state and the next action: selected sector, hover countdown arc, active navigation, toggles, primary buttons, focus rings, chips and statistics. Vendor colours still appear only inside program icons.
-- Surfaces: slightly cooler near-black dark theme (#09090b base), panels one step lighter than the page so cards read as cards; 8px controls, 12px panels, 14px dialogs.
-- Identity: the orbit mark gains a second, fainter orbit for "2" on an accent-blue tile (`assets/orbit.svg`), so Orbit and Orbit 2 are distinguishable in the taskbar and Start menu. The titlebar shows the mark, "Orbit", an accent "2" badge and the version.
-- Wheel: the center previews the hovered action (name and verb in accent); a thin arc outside the sector fills over the hover delay; numbers 1–9 appear only when the wheel was opened from the keyboard; labels can be hidden for a quieter wheel; items fade in with a 12ms stagger that reduced motion turns off. Keyboard focus is shown by the highlighted sector, not a focus box.
-- Command palette (Ctrl+K and the titlebar search field): sections Дії, Групи, Команди, Перейти, Меню; actions sorted by real launch counts; Enter runs, Shift+Enter edits.
-- Overview: four stat cards, a 14-day activity bar chart with today in full accent, top and recent actions, tips. Only real local counts are shown; empty states explain how numbers appear.
-- Keys action: shortcut captured by pressing it, displayed as keycaps; preset chips for common commands.
-- Reject: fabricated statistics, decorative illustrations, gradients outside the brand mark and welcome card, more than one accent at a time.
-
-# Orbit 1 · approved direction (foundation)
-
-The user approved option 5, Vercel Geist, on 2026-11-01. Direct implementation is authorized.
+Orbit is a Rust + Tauri app (HTML/CSS interface) with an ink/cream base, one orange accent and six pastel category tints. The editor and radial wheel share the same tokens, typography and controls in dark and light themes.
 
 ## Reference lock
 
-Primary: https://vercel.com/geist/introduction
+Sources: `src/ui/theme.rs` (palette, `TINTS`, `kind_tint`, radii and fonts), `src/ui/widgets.rs` (controls), `src/ui/editor.rs` (pages), `src/ui/wheel.rs` (wheel), `src/ui/icon_paths.rs` and `assets/icons/map.json` (icons).
 
-- Preserve monochrome canvas, deliberate contrast, compact 13–14px UI type, single-pixel borders, minimal decoration.
-- Colors: https://vercel.com/geist/colors — gray for surfaces/borders/text, distinct hover and active surfaces; green only for actual enabled status; vendor icon colors only inside program icons.
-- Materials: https://vercel.com/geist/materials — 6px everyday controls, 12px elevated panels, low elevation. The wheel itself is circular because of the product interaction, not as a general pill treatment.
-- Typography: https://vercel.com/geist/typography — 24px page title, 14px labels, 13px secondary text, monospace for shortcuts and technical values. Local Geist font, Segoe UI fallback for unsupported Ukrainian characters.
-- Command patterns: https://vercel.com/geist/command-menu — groups, explicit labels, Escape, keyboard operation and discoverable shortcuts. Adapted to a pointer-first radial menu from the user's brief.
-- Secondary: https://www.radix-ui.com/themes/docs/theme/overview — borrow semantic light/dark token separation only.
-- Motion: Refero bundled motion craft — short functional transitions; reduced-motion support.
-- Media: code-native SVG icons and wheel geometry; no bitmap imagery is needed.
+- Palette: dark canvas `#0e0e0f`, panels `#1a1a1c` and cream text `#f7f4ee`; light canvas `#f3eee3`, panels `#fffcf6` and ink text `#121212`. Orange (`#ff5f1f` dark, `#f2581b` light) is the single accent for the current choice, CTA and focus. Mint marks the on state; red is reserved for errors and destructive actions. Vendor colors stay inside program icons.
+- Pastels: lilac `#d8c6ff`, lemon `#f2ec84`, mint `#6fe3a8`, sky `#aed8ff`, peach `#ffc9a6`, rose `#ffc2df`. Use them for kind chips, stat tiles and section header chips, with ink content on every pastel. Kind mapping: apps sky, folders lemon, scripts mint, system lilac, groups peach. Onboarding uses lilac.
+- Surfaces and radii: filled tiles with restrained semantic hairlines where needed. The design rule is 14px fields and 28px tiles; the current `R_FIELD` token is 16px (`R_ITEM` is 14px). Buttons and search are pills; pill navigation sits in a floating capsule.
+- Controls: orange CTA, neutral secondary, ghost and danger pill buttons; mint-on toggle with a spring knob; orange range on a neutral track; pill search and segmented control. Neutral primary buttons, open menu tabs and active segments retain theme-aware ink/cream inversion.
+- Typography: bundled Geist Medium for body and SemiBold for headings. Titles 36px, sections 18px, body 12–14px, captions at least 11px. Field labels are uppercase and tracked; Geist Mono is used for shortcuts and counters.
+- Icons: Phosphor Icons (MIT), vendored SVGs in `assets/icons`, with `LICENSE-phosphor.txt` and `map.json`. Glyphs use fill weight; controls use bold weight. Two custom glyphs were picked by the owner from Codex concepts and traced to vector: `orbit` (five petals around a dot, the brand mark and app icon) and `wheel` (six ring segments, the radial menu). Owner rule: do not generate icons or tokens; use existing packs. Marks that must be invented follow the concept-to-vector workflow: Codex concepts, owner picks, then the chosen concept is traced to vector.
+- Wheel: rounded sector tiles with a maximum span of 64°. Show icons and labels through eight slots, icons only above eight; the hub shows the hovered action name. The selected sector is orange with ink content and a small pop; a hover-progress arc shows the launch delay. Groups have a pastel pip; hub dots show menu count and the current menu. Scroll switches menus; digits 1–9 launch the corresponding actions.
+- Light theme parity: editor, wheel, fields, popups, focus and interaction states use the light palette with the same roles, geometry and behavior. Pastel tints and their ink content are shared across themes.
+- Motion and commands: short functional transitions, a spring toggle knob and reduced-motion support. Keep explicit labels, groups, Escape, keyboard operation and discoverable shortcuts.
 - User correction: radial gutters must have equal physical width at the inner and outer arcs. Use 6 viewBox units with parallel offset edges; angular gaps alone are incorrect.
-- App identity: extend the existing single tilted orbit glyph into a monochrome Windows icon. Editable `assets/orbit.svg` is the source; black rounded tile, white orbit, center dot and satellite. `scripts/build-icons.cjs` exports ICO sizes 16–256px, with stronger strokes at small sizes. No generated bitmap art is needed for this geometric mark.
+- App identity: five rounded petals around a dot (owner-picked concept), cream on an ink rounded tile with the top petal in the orange accent. Editable `assets/orbit.svg` is the source; `assets/orbit.ico` and `assets/orbit-*.png` (16-256) are rendered from the same geometry.
 - Windows integration: the same identity is embedded into the executable and assigned to both native windows and the tray. Use a dedicated Orbit AppUserModelID.
-- Dropdowns: apply the existing Geist surface/border/text/hover/active tokens to both the closed control and its picker; 6px control corners, 8px picker corners, 4px option corners. Chromium customizable select keeps browser-managed keyboard behavior and top-layer positioning. Technical references: https://developer.chrome.com/blog/a-customizable-select and https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select .
-- Approved app discovery flow: search installed apps first, show actual program icons and versioned names, autofill target/name on explicit selection; name remains editable. File/URL fallbacks stay visible above the result popover. Advanced target/arguments use a collapsed disclosure. Preserve the 490×560 action-dialog frame and Geist tokens. Keyboard interaction follows https://www.w3.org/WAI/ARIA/apg/patterns/combobox/ .
-- Reject: decorative gradients, glass surfaces, excessive rounding, purple accents, marketing hero layout, fabricated usage statistics.
-- Drag into groups: preserve the user's action-list layout. Drag the row body; editing, delete and reorder buttons retain their click behavior. An eligible group uses the existing active surface and a thin monochrome inset border; its subtitle changes to an explicit drop instruction. Invalid targets show a muted reason. No automatic group navigation while dragging. Source: user's annotated action-list screenshot and existing Geist selected/action rows.
+- Dropdowns: use Orbit surface, border, text, hover and active tokens for the closed field and popup. Use the field radius, 20px popup corners and 14px option corners; orange marks focus and the current option's check.
+- Approved app discovery flow: search installed apps first, show actual program icons and versioned names, autofill target/name on explicit selection; name remains editable. File/URL fallbacks stay visible above the result popover. Advanced target/arguments use a collapsed disclosure. Preserve the 490×560 action-dialog frame and Orbit tokens. Keyboard interaction follows https://www.w3.org/WAI/ARIA/apg/patterns/combobox/ .
+- Reject: decorative gradients, glass surfaces, bordered boxes where a filled tile works, orange used as decoration, marketing hero layout and fabricated usage statistics.
+- Drag into groups: preserve the user's action-list layout. Drag the row body; editing, delete and reorder buttons retain their click behavior. An eligible group uses the active surface and a thin orange inset border; its subtitle changes to an explicit drop instruction. Invalid targets show a muted reason. No automatic group navigation while dragging. Source: user's annotated action-list screenshot and current action rows.
 - Move outward: nested action rows expose only the outward arrow glyph, retaining the full tooltip and accessible name. Moving stays in the current group for repeated moves and uses the existing save toast. Source: user's request to move Work/Adobe Program back to the main wheel and later remove the visible button label.
-- Preview rearrangement: dragging an icon, label or sector changes sibling order. A six-pixel movement threshold preserves ordinary click navigation/editing. Fade the source and outline the destination using existing active/text tokens; a compact pointer-following label identifies the dragged item. Dropping on the center of a nested wheel moves the item exactly one level up. Root/full-parent centers show a muted reason and cannot accept the move. Keep live launcher behavior separate. Source: user's annotated sector and center-drop screenshots.
-- Updates: extend the existing settings sections with installed version, live status, check/download/install buttons and a restrained monochrome progress bar. Keep the section DOM stable during progress so settings do not flicker. Source is the user's public GitHub repository; preserve the existing Geist border, type and action roles. Installation is explicit and communicates the restart before the click.
-- Wheel size: extend the approved Geist settings rows with a monochrome range control, visible percentage, reset to 100% and the existing wheel preview command. Range 60–150% in 5% increments; preserve the editor's schematic preview and apply size to the actual invoked wheel. Keep keyboard focus after saving and fit the wheel to the monitor work area. Sources: existing appearance/settings rows, user request for circle size, existing preview interaction.
+- Preview rearrangement: dragging an icon, label or sector changes sibling order. A six-pixel movement threshold preserves ordinary click navigation/editing. Fade the source and outline the destination in orange on the active surface; a compact pointer-following label identifies the dragged item. Dropping on the center of a nested wheel moves the item exactly one level up. Root/full-parent centers show a muted reason and cannot accept the move. Keep live launcher behavior separate. Source: user's annotated sector and center-drop screenshots.
+- Updates: settings show installed version, live status, check/download/install buttons and a mint progress bar on a neutral track. Keep the section layout stable during progress so settings do not flicker. Source is the user's public GitHub repository; preserve Orbit border, type and action roles. Installation is explicit and communicates the restart before the click.
+- Wheel size: use the existing settings rows with an orange range control, visible percentage, reset to 100% and the wheel preview command. Range 60–150% in 5% increments; preserve the editor's schematic preview and apply size to the actual invoked wheel. Keep keyboard focus after saving and fit the wheel to the monitor work area. Sources: existing appearance/settings rows and user's circle-size request.
 
 ## Decision ledger
 
 | Decision | Source | Role | Purpose |
 |---|---|---|---|
-| Near-black default with reversible light theme | Geist colors + user | Canvas and semantic tokens | Stable visual contrast |
-| White primary action in dark mode | Geist contrast roles | Primary actions only | Clear next action |
-| 6px controls, 12px panels | Geist materials | Surface hierarchy | Small, disciplined rounding |
-| Sidebar, menu action list, editable detail dialog | User feature brief | Management UI | Fast configuration without hiding actions |
+| Ink/cream base with light theme parity | Orbit palette + user | Canvas and semantic tokens | Stable visual contrast |
+| One orange accent; mint on state; six ink-on-pastel tints | Orbit palette and kind mapping | Choice, CTA, focus, state and categories | Consistent color roles |
+| Pill controls, 14px field rule, 28px tiles | Orbit design rule; field token currently 16px | Surface hierarchy | Shared radii across editor and wheel |
+| Floating capsule with pill navigation, menu action list, editable detail dialog | User feature brief | Management UI | Configuration with visible actions |
 | Circular wheel and nested group navigation | User brief | Global overlay | Mouse-first Adobe launcher workflow |
 | Release, hover, click activation settings | User hover brief + accidental activation concern | Execution behavior | User controls selection commitment |
 | Global native mouse listener separate from renderer | Microsoft LowLevelMouseProc | Input service | Fast callback and deterministic cleanup |
 
 ## Scope
 
-Native Windows desktop app, Electron UI with isolated preload, local persistence, native XBUTTON1/XBUTTON2 listener. No account or cloud connection. Native side-button support must be verified on actual hardware, especially vendor-remapped buttons.
+Native Windows desktop app in Rust (Tauri/WebView2 interface, Win32 services), local persistence, native XBUTTON1/XBUTTON2 listener. No account or cloud connection. Native side-button support must be verified on actual hardware, especially vendor-remapped buttons.

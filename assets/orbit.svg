@@ -1,15 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
-  <title>Orbit 2</title>
-  <defs>
-    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5b93ff"/>
-      <stop offset="1" stop-color="#2a55e0"/>
-    </linearGradient>
-  </defs>
-  <rect x="2" y="2" width="60" height="60" rx="14" fill="url(#tile)"/>
-  <rect x="2.5" y="2.5" width="59" height="59" rx="13.5" fill="none" stroke="#ffffff" stroke-opacity=".18"/>
-  <ellipse cx="32" cy="32" rx="22" ry="10.5" transform="rotate(35 32 32)" fill="none" stroke="#ffffff" stroke-opacity=".5" stroke-width="2.4"/>
-  <ellipse cx="32" cy="32" rx="22" ry="10.5" transform="rotate(-35 32 32)" fill="none" stroke="#ffffff" stroke-width="3.2"/>
-  <circle cx="32" cy="32" r="4.5" fill="#ffffff"/>
-  <circle cx="50.021" cy="19.381" r="4.2" fill="#ffffff" stroke="#2f5fe6" stroke-width="1.8"/>
+  <title>Orbit</title>
+  <rect width="64" height="64" rx="14.4" fill="#0e0e0f"/>
+  <g transform="translate(4.761 4.786) scale(0.21281)" stroke-width="30" stroke-linejoin="round" fill="#f7f4ee" stroke="#f7f4ee">
+    <polygon points="101.4,44.9 154.6,44.9 131.5,78.8 124.5,78.8" fill="#ff5f1f" stroke="#ff5f1f"/>
+    <polygon points="101.4,44.9 154.6,44.9 131.5,78.8 124.5,78.8" transform="rotate(72 128 128)"/>
+    <polygon points="101.4,44.9 154.6,44.9 131.5,78.8 124.5,78.8" transform="rotate(144 128 128)"/>
+    <polygon points="101.4,44.9 154.6,44.9 131.5,78.8 124.5,78.8" transform="rotate(216 128 128)"/>
+    <polygon points="101.4,44.9 154.6,44.9 131.5,78.8 124.5,78.8" transform="rotate(288 128 128)"/>
+    <circle cx="128" cy="128" r="19" stroke="none"/>
+  </g>
 </svg>
