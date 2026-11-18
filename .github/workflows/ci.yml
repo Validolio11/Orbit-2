@@ -33,8 +33,7 @@ jobs:
       - name: Executable starts and passes its self-test
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath src-tauri	arget
-elease\orbit-tauri.exe -ArgumentList '--self-test' -Wait -PassThru
+          $p = Start-Process -FilePath src-tauri\target\release\orbit-tauri.exe -ArgumentList '--self-test' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)." }
       - uses: actions/upload-artifact@v5
         with:
