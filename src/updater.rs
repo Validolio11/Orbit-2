@@ -137,33 +137,42 @@ impl Updater {
         std::fs::create_dir_all(&self.dir).map_err(|e| e.to_string())?;
         let file = self.dir.join(format!("Orbit-{}.exe", release.version));
         let partial = file.with_extension("part");
-        let mut out = std::fs::File::create(&partial).map_err(|e| e.to_string())?;
-        let mut reader = response.into_reader().take(300 * 1024 * 1024);
-        let (mut hasher, mut buffer, mut received) = (Sha256::new(), vec![0u8; 64 * 1024], 0usize);
-        loop {
-            let n = reader.read(&mut buffer).map_err(network)?;
-            if n == 0 {
-                break;
+        let downloaded = (|| -> Result<(), String> {
+            let mut out = std::fs::File::create(&partial).map_err(|e| e.to_string())?;
+            let mut reader = response.into_reader().take(300 * 1024 * 1024);
+            let (mut hasher, mut buffer, mut received) =
+                (Sha256::new(), vec![0u8; 64 * 1024], 0usize);
+            loop {
+                let n = reader.read(&mut buffer).map_err(network)?;
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buffer[..n]);
+                out.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
+                received += n;
+                if total > 0.0 {
+                    self.set(Phase::Downloading(received as f32 / total * 100.0));
+                }
             }
-            hasher.update(&buffer[..n]);
-            out.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
-            received += n;
-            if total > 0.0 {
-                self.set(Phase::Downloading(received as f32 / total * 100.0));
+            out.sync_all().map_err(|e| e.to_string())?;
+            drop(out);
+            let actual: String = hasher
+                .finalize()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect();
+            if actual != expected {
+                return Err(
+                    "Завантажений файл пошкоджений (SHA-256 не збігається). Спробуйте ще раз."
+                        .into(),
+                );
             }
-        }
-        out.sync_all().map_err(|e| e.to_string())?;
-        drop(out);
-        let actual: String = hasher
-            .finalize()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect();
-        if actual != expected {
+            Ok(())
+        })();
+        // Whatever failed, no half-written file stays behind.
+        if let Err(error) = downloaded {
             let _ = std::fs::remove_file(&partial);
-            return Err(
-                "Завантажений файл пошкоджений (SHA-256 не збігається). Спробуйте ще раз.".into(),
-            );
+            return Err(error);
         }
         std::fs::rename(&partial, &file).map_err(|e| e.to_string())?;
         Ok(file)

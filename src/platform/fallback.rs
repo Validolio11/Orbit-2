@@ -44,6 +44,7 @@ pub fn find_own_window(_title: &str) -> Option<isize> {
 }
 pub fn place_window(_handle: isize, _rect: Rect, _activate: bool) {}
 pub fn hide_window(_handle: isize) {}
+pub fn set_top_crop(_rows: i32) {}
 pub fn show_window(_handle: isize) {}
 pub fn shell_open(target: &str) -> Result<(), String> {
     std::process::Command::new("xdg-open")

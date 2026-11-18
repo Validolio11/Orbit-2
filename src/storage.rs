@@ -114,8 +114,19 @@ impl Store {
     }
     /// Validates and persists a whole configuration; nothing changes when either step fails.
     pub fn save(&self, next: Settings) -> Result<Settings, String> {
-        let next = next.checked()?;
+        self.save_locked(&mut self.lock(), next)
+    }
+    /// Like `save`, but refuses when the settings changed since the caller read `expected`.
+    #[allow(dead_code)] // used by the Tauri app
+    pub fn save_if_revision(&self, next: Settings, expected: u64) -> Result<Settings, String> {
         let mut inner = self.lock();
+        if inner.revision != expected {
+            return Err(REVISION_MOVED.into());
+        }
+        self.save_locked(&mut inner, next)
+    }
+    fn save_locked(&self, inner: &mut Inner, next: Settings) -> Result<Settings, String> {
+        let next = next.checked()?;
         let text = serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?;
         write_durable(&self.file, &text)
             .map_err(|e| format!("Не вдалося зберегти налаштування: {e}"))?;
@@ -123,13 +134,19 @@ impl Store {
         inner.revision += 1;
         Ok(next)
     }
-    /// Applies a change to the settings that are current when the lock is taken.
+    /// Applies a change to the settings that are current, holding the lock for the whole write.
     pub fn update(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings, String> {
-        let mut next = self.get();
+        let mut inner = self.lock();
+        let mut next = inner.settings.clone();
         change(&mut next);
-        self.save(next)
+        self.save_locked(&mut inner, next)
     }
 }
+
+/// The editor matches this text to re-apply its edit on fresh settings.
+#[allow(dead_code)] // used by the Tauri app
+pub const REVISION_MOVED: &str =
+    "Налаштування змінилися в іншому місці. Оновіть їх і повторіть зміну.";
 
 pub fn export(file: &Path, settings: &Settings) -> std::io::Result<()> {
     fs::write(
@@ -164,6 +181,53 @@ mod tests {
         let (recovered, loaded) = load(&file, defaults);
         assert!(matches!(loaded, Loaded::FromBackup(_)));
         assert_eq!(recovered.hover_delay, 500);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn concurrent_updates_are_not_lost() {
+        let dir = std::env::temp_dir().join(format!("orbit-test-{}", model::new_id()));
+        let store = Store::new(
+            model::default_settings(r"C:\Docs", vec![]),
+            dir.join("settings.json"),
+        );
+        let (a, b) = (store.clone(), store.clone());
+        let ta = std::thread::spawn(move || {
+            for i in 0..30 {
+                a.update(|s| s.hover_delay = 200 + i).unwrap();
+            }
+        });
+        let tb = std::thread::spawn(move || {
+            for i in 0..30 {
+                b.update(|s| s.wheel_size = 400 + i).unwrap();
+            }
+        });
+        ta.join().unwrap();
+        tb.join().unwrap();
+        let s = store.get();
+        assert_eq!((s.hover_delay, s.wheel_size), (229, 429));
+        assert_eq!(store.revision(), 61);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn stale_revision_is_rejected() {
+        let dir = std::env::temp_dir().join(format!("orbit-test-{}", model::new_id()));
+        let store = Store::new(
+            model::default_settings(r"C:\Docs", vec![]),
+            dir.join("settings.json"),
+        );
+        let (stale, rev) = store.snapshot();
+        store.update(|s| s.hover_delay = 600).unwrap();
+        let mut next = stale.clone();
+        next.hover_delay = 700;
+        assert_eq!(
+            store.save_if_revision(next.clone(), rev),
+            Err(REVISION_MOVED.into())
+        );
+        assert_eq!(store.get().hover_delay, 600);
+        store.save_if_revision(next, store.revision()).unwrap();
+        assert_eq!(store.get().hover_delay, 700);
         let _ = fs::remove_dir_all(dir);
     }
 }

@@ -6,3 +6,9 @@ docs/*.png
 .env
 .env.*
 *.local.json
+
+graphify-out/
+src-tauri/dist/
+src-tauri/editor/node_modules/
+node_modules/
+.claude/

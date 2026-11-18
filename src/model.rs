@@ -11,8 +11,6 @@ pub const MAX_GROUP_DEPTH: usize = 4;
 pub const DEFAULT_WHEEL_SIZE: u32 = 520;
 pub const MIN_WHEEL_SIZE: u32 = 312;
 pub const MAX_WHEEL_SIZE: u32 = 780;
-pub const HOVER_DELAYS: [u32; 8] = [150, 250, 350, 500, 750, 1000, 1500, 2000];
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Theme {
@@ -46,54 +44,6 @@ pub enum Kind {
     Group,
 }
 
-impl Kind {
-    pub const ALL: [Kind; 5] = [
-        Kind::App,
-        Kind::Folder,
-        Kind::Script,
-        Kind::System,
-        Kind::Group,
-    ];
-    pub fn label(self) -> &'static str {
-        match self {
-            Kind::App => "Застосунок",
-            Kind::Folder => "Папка",
-            Kind::Script => "Скрипт",
-            Kind::System => "Windows",
-            Kind::Group => "Група",
-        }
-    }
-    pub fn icon(self) -> &'static str {
-        match self {
-            Kind::App => "app",
-            Kind::Folder => "folder",
-            Kind::Script => "script",
-            Kind::System => "system",
-            Kind::Group => "group",
-        }
-    }
-}
-
-impl Activation {
-    pub const ALL: [Activation; 3] = [Activation::Release, Activation::Hover, Activation::Click];
-    pub fn label(self) -> &'static str {
-        match self {
-            Activation::Release => "Відпускання кнопки",
-            Activation::Hover => "Наведення курсора",
-            Activation::Click => "Клацання мишею",
-        }
-    }
-}
-impl GroupOpen {
-    pub const ALL: [GroupOpen; 2] = [GroupOpen::Hover, GroupOpen::Click];
-    pub fn label(self) -> &'static str {
-        match self {
-            GroupOpen::Hover => "Наведення курсора",
-            GroupOpen::Click => "Клацання мишею",
-        }
-    }
-}
-
 /// Windows commands in the order the action dialog shows them: (id, name, icon).
 pub const SYSTEM_ACTIONS: [(&str, &str, &str); 25] = [
     ("explorer", "Провідник", "folder"),
@@ -125,10 +75,6 @@ pub const SYSTEM_ACTIONS: [(&str, &str, &str); 25] = [
 pub fn system_name(id: &str) -> Option<&'static str> {
     SYSTEM_ACTIONS.iter().find(|a| a.0 == id).map(|a| a.1)
 }
-pub fn system_icon(id: &str) -> Option<&'static str> {
-    SYSTEM_ACTIONS.iter().find(|a| a.0 == id).map(|a| a.2)
-}
-
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Action {
     pub id: String,
@@ -158,37 +104,6 @@ impl Action {
     }
     pub fn is_group(&self) -> bool {
         self.kind == Kind::Group
-    }
-    /// Depth of nested groups below and including this item (0 for a plain action).
-    pub fn group_height(&self) -> usize {
-        if self.is_group() {
-            1 + self
-                .children
-                .iter()
-                .map(Action::group_height)
-                .max()
-                .unwrap_or(0)
-        } else {
-            0
-        }
-    }
-    pub fn description(&self) -> String {
-        match self.kind {
-            Kind::Group => format!(
-                "{} {} у вкладеному меню",
-                self.children.len(),
-                if self.children.len() == 1 {
-                    "дія"
-                } else {
-                    "дій"
-                }
-            ),
-            Kind::System => system_name(&self.target)
-                .unwrap_or("Системна команда")
-                .to_string(),
-            _ if self.target.is_empty() => "Виберіть шлях до застосунку".into(),
-            _ => self.target.clone(),
-        }
     }
 }
 
@@ -226,16 +141,6 @@ pub struct Settings {
 
 pub fn new_id() -> String {
     uuid::Uuid::new_v4().to_string()
-}
-
-pub fn actions_word(count: usize) -> &'static str {
-    if count % 10 == 1 && count % 100 != 11 {
-        "дію"
-    } else if [2, 3, 4].contains(&(count % 10)) && ![12, 13, 14].contains(&(count % 100)) {
-        "дії"
-    } else {
-        "дій"
-    }
 }
 
 // ---------- Validation ----------
@@ -554,45 +459,6 @@ impl Settings {
     pub fn action(&self, id: &str) -> Option<&Action> {
         self.find(id).map(|l| self.get(&l))
     }
-    /// The list that holds the located item.
-    pub fn siblings_mut(&mut self, location: &Location) -> &mut Vec<Action> {
-        let mut items = &mut self.menus[location.menu].items;
-        for &i in &location.indices[..location.indices.len() - 1] {
-            items = &mut items[i].children;
-        }
-        items
-    }
-    pub fn siblings(&self, location: &Location) -> &Vec<Action> {
-        let mut items = &self.menus[location.menu].items;
-        for &i in &location.indices[..location.indices.len() - 1] {
-            items = &items[i].children;
-        }
-        items
-    }
-
-    /// Every action of every menu with its menu and group names, for the library page.
-    pub fn flatten(&self) -> Vec<(&Action, &Menu, Vec<&str>)> {
-        fn walk<'a>(
-            items: &'a [Action],
-            menu: &'a Menu,
-            path: Vec<&'a str>,
-            out: &mut Vec<(&'a Action, &'a Menu, Vec<&'a str>)>,
-        ) {
-            for item in items {
-                out.push((item, menu, path.clone()));
-                if item.is_group() {
-                    let mut next = path.clone();
-                    next.push(&item.name);
-                    walk(&item.children, menu, next, out);
-                }
-            }
-        }
-        let mut out = Vec::new();
-        for menu in &self.menus {
-            walk(&menu.items, menu, Vec::new(), &mut out);
-        }
-        out
-    }
 }
 
 /// Where an action sits: its menu, the index at every level, and the ids of the groups above it.
@@ -602,166 +468,9 @@ pub struct Location {
     pub indices: Vec<usize>,
     pub groups: Vec<String>,
 }
-impl Location {
-    pub fn depth(&self) -> usize {
-        self.indices.len() - 1
-    }
-    pub fn index(&self) -> usize {
-        *self.indices.last().unwrap()
-    }
-}
+impl Location {}
 
 // ---------- Moving actions (drag and drop, outward buttons) ----------
-
-/// Why an action cannot be dropped on a group, or None when it can.
-pub fn move_error(state: &Settings, source_id: &str, group_id: &str) -> Option<&'static str> {
-    let Some(source) = state.find(source_id) else {
-        return Some("Дію для переміщення не знайдено.");
-    };
-    let Some(target) = state.find(group_id) else {
-        return Some("Групу призначення не знайдено.");
-    };
-    let (source_item, target_item) = (state.get(&source), state.get(&target));
-    if !target_item.is_group() {
-        return Some("Перемістити дію можна лише в групу.");
-    }
-    if source_id == group_id {
-        return Some("Групу не можна перемістити в саму себе.");
-    }
-    fn contains(item: &Action, id: &str) -> bool {
-        item.id == id || item.is_group() && item.children.iter().any(|c| contains(c, id))
-    }
-    if contains(source_item, group_id) {
-        return Some("Групу не можна перемістити у власну вкладену групу.");
-    }
-    if source.groups.last().map(String::as_str) == Some(group_id) {
-        return None;
-    }
-    if target_item.children.len() >= MAX_ITEMS {
-        return Some("У цій групі вже 12 дій. Спочатку звільніть місце.");
-    }
-    let subtree = if source_item.is_group() && !source_item.children.is_empty() {
-        source_item.group_height()
-    } else {
-        0
-    };
-    if target.depth() + 1 + subtree > MAX_GROUP_DEPTH {
-        return Some("Переміщення перевищить обмеження у чотири вкладені рівні.");
-    }
-    None
-}
-
-fn take(state: &mut Settings, location: &Location) -> Action {
-    state.siblings_mut(location).remove(location.index())
-}
-
-pub fn move_to_group(
-    state: &Settings,
-    source_id: &str,
-    group_id: &str,
-) -> Result<Settings, String> {
-    if let Some(error) = move_error(state, source_id, group_id) {
-        return Err(error.into());
-    }
-    let mut next = state.clone();
-    let source = next.find(source_id).unwrap();
-    if source.groups.last().map(String::as_str) == Some(group_id) {
-        return Ok(next);
-    }
-    let item = take(&mut next, &source);
-    let target = next.find(group_id).unwrap();
-    let mut items = &mut next.menus[target.menu].items;
-    for &i in &target.indices[..target.indices.len() - 1] {
-        items = &mut items[i].children;
-    }
-    items[target.index()].children.push(item);
-    Ok(next)
-}
-
-pub fn move_to_root(state: &Settings, source_id: &str) -> Result<Settings, String> {
-    let source = state
-        .find(source_id)
-        .ok_or("Дію для переміщення не знайдено.")?;
-    if source.depth() > 0 && state.menus[source.menu].items.len() >= MAX_ITEMS {
-        return Err(
-            "У головному меню вже 12 дій. Спочатку видаліть зайву дію або перемістіть її в групу."
-                .into(),
-        );
-    }
-    let mut next = state.clone();
-    if source.depth() == 0 {
-        return Ok(next);
-    }
-    let item = take(&mut next, &source);
-    next.menus[source.menu].items.push(item);
-    Ok(next)
-}
-
-pub fn reorder(state: &Settings, source_id: &str, target_id: &str) -> Result<Settings, String> {
-    let source = state
-        .find(source_id)
-        .ok_or("Дію для переміщення не знайдено.")?;
-    let target = state
-        .find(target_id)
-        .ok_or("Дію призначення не знайдено.")?;
-    if source.menu != target.menu
-        || source.indices[..source.depth()] != target.indices[..target.depth()]
-        || source.depth() != target.depth()
-    {
-        return Err("Змінити порядок можна лише між діями одного рівня меню.".into());
-    }
-    let mut next = state.clone();
-    let items = next.siblings_mut(&source);
-    let item = items.remove(source.index());
-    items.insert(target.index(), item);
-    Ok(next)
-}
-
-pub fn move_to_parent(state: &Settings, source_id: &str) -> Result<Settings, String> {
-    let source = state
-        .find(source_id)
-        .ok_or("Дію для переміщення не знайдено.")?;
-    if source.depth() == 0 {
-        return Ok(state.clone());
-    }
-    let mut parent = source.clone();
-    parent.indices.pop();
-    if state.siblings(&parent).len() >= MAX_ITEMS {
-        return Err("На рівні вище вже 12 дій. Спочатку звільніть місце в цьому меню.".into());
-    }
-    let mut next = state.clone();
-    let item = take(&mut next, &source);
-    next.siblings_mut(&parent).push(item);
-    Ok(next)
-}
-
-/// Swaps an action with the one above it.
-pub fn move_up(state: &Settings, id: &str) -> Option<Settings> {
-    let location = state.find(id)?;
-    if location.index() == 0 {
-        return None;
-    }
-    let mut next = state.clone();
-    next.siblings_mut(&location)
-        .swap(location.index(), location.index() - 1);
-    Some(next)
-}
-
-pub fn remove(state: &Settings, id: &str) -> Settings {
-    let mut next = state.clone();
-    if let Some(location) = next.find(id) {
-        take(&mut next, &location);
-    }
-    next
-}
-
-/// Gives every action of a copied menu a new id.
-pub fn renew_ids(items: &mut [Action]) {
-    for item in items {
-        item.id = new_id();
-        renew_ids(&mut item.children);
-    }
-}
 
 // ---------- Launch helpers ----------
 
@@ -835,10 +544,6 @@ pub fn extension(path: &str) -> String {
         .map(|i| base[i..].to_ascii_lowercase())
         .unwrap_or_default()
 }
-/// The folder name in the wheel comes from the folder itself unless the user types another one.
-pub fn folder_name(target: &str) -> String {
-    base_name(target)
-}
 /// A file's wheel name is its name without the extension.
 pub fn file_stem(target: &str) -> String {
     let base = base_name(target);
@@ -849,28 +554,6 @@ pub fn file_stem(target: &str) -> String {
 }
 
 pub const SCRIPT_EXTENSIONS: [&str; 4] = [".ps1", ".py", ".js", ".cjs"];
-
-/// Turns a path dragged in from Explorer into an action, or None when Orbit cannot launch it.
-pub fn dropped_action(path: &str, is_directory: bool) -> Option<Action> {
-    if is_directory {
-        let mut a = Action::new(Kind::Folder, folder_name(path), path);
-        a.icon = "folder".into();
-        return Some(a);
-    }
-    let ext = extension(path);
-    let kind = if [".exe", ".lnk"].contains(&ext.as_str()) {
-        Kind::App
-    } else if SCRIPT_EXTENSIONS.contains(&ext.as_str()) {
-        Kind::Script
-    } else {
-        return None;
-    };
-    let mut action = Action::new(kind, file_stem(path), path);
-    if kind == Kind::App {
-        action.icon = "app".into();
-    }
-    Some(action)
-}
 
 const SHELL_PROCESSES: [&str; 10] = [
     "explorer.exe",
@@ -896,72 +579,6 @@ pub fn foreground_candidate(exe: &str, own_exe: &str) -> bool {
         return false;
     }
     !SHELL_PROCESSES.contains(&base_name(exe).to_ascii_lowercase().as_str())
-}
-
-// ---------- Wheel geometry (480×480 design units) ----------
-
-pub mod geometry {
-    use std::f32::consts::PI;
-    /// Index of the sector under a point relative to the center, or None in the hub or outside the ring.
-    pub fn sector_at(x: f32, y: f32, count: usize, inner: f32, outer: f32) -> Option<usize> {
-        let radius = x.hypot(y);
-        if count == 0 || radius < inner || radius > outer {
-            return None;
-        }
-        let step = 360.0 / count as f32;
-        let angle = ((y.atan2(x).to_degrees()) + 90.0 + step / 2.0 + 360.0) % 360.0;
-        Some((angle / step).floor() as usize % count)
-    }
-    /// Angle (radians) of the middle of a sector; sector 0 is at the top.
-    pub fn slot_angle(index: usize, count: usize) -> f32 {
-        (-90.0 + index as f32 * 360.0 / count as f32).to_radians()
-    }
-    /// Outline of a sector with parallel gutters of `gap` units at both arcs, as points around the origin.
-    pub fn sector_outline(
-        index: usize,
-        count: usize,
-        inner: f32,
-        outer: f32,
-        gap: f32,
-        segments: usize,
-    ) -> (Vec<[f32; 2]>, Vec<[f32; 2]>) {
-        let step = 2.0 * PI / count as f32;
-        let a = -PI / 2.0 + index as f32 * step - step / 2.0;
-        let b = a + step;
-        let (io, oo) = ((gap / (2.0 * inner)).asin(), (gap / (2.0 * outer)).asin());
-        let arc = |r: f32, from: f32, to: f32| {
-            (0..=segments)
-                .map(|i| {
-                    let t = from + (to - from) * i as f32 / segments as f32;
-                    [r * t.cos(), r * t.sin()]
-                })
-                .collect::<Vec<_>>()
-        };
-        (arc(outer, a + oo, b - oo), arc(inner, a + io, b - io))
-    }
-    /// Widest label whose corners stay inside the sector, clear of its gutter.
-    pub fn label_width(angle: f32, count: usize) -> f32 {
-        if count < 3 {
-            return 104.0;
-        }
-        let (x, y, half) = (150.0 * angle.cos(), 150.0 * angle.sin(), PI / count as f32);
-        let (start, end) = (angle - half, angle + half);
-        let fits = |w: f32| {
-            [-w / 2.0, w / 2.0].iter().all(|dx| {
-                [0.0f32, 28.0].iter().all(|dy| {
-                    let (px, py) = (x + dx, y + dy);
-                    start.cos() * py - start.sin() * px >= 3.0
-                        && px * end.sin() - py * end.cos() >= 3.0
-                })
-            })
-        };
-        let (mut low, mut high) = (0.0f32, 84.0f32);
-        for _ in 0..12 {
-            let mid = (low + high) / 2.0;
-            if fits(mid) { low = mid } else { high = mid }
-        }
-        low
-    }
 }
 
 // ---------- Defaults ----------
@@ -1130,83 +747,6 @@ mod tests {
     }
 
     #[test]
-    fn moving_into_a_group_keeps_metadata_and_does_not_mutate() {
-        let original = settings(vec![
-            action("illustrator"),
-            group("adobe", vec![action("photoshop")]),
-            action("browser"),
-        ]);
-        let moved = move_to_group(&original, "illustrator", "adobe").unwrap();
-        assert_eq!(
-            moved.menus[0]
-                .items
-                .iter()
-                .map(|i| i.id.as_str())
-                .collect::<Vec<_>>(),
-            ["adobe", "browser"]
-        );
-        assert_eq!(
-            moved.menus[0].items[0].children[1],
-            original.menus[0].items[0]
-        );
-        assert_eq!(original.menus[0].items.len(), 3);
-        assert!(moved.clone().checked().is_ok());
-    }
-
-    #[test]
-    fn move_rules() {
-        let full = settings(vec![
-            group("full", (0..12).map(|i| action(&format!("a{i}"))).collect()),
-            action("x"),
-            group("g", vec![]),
-        ]);
-        assert!(move_error(&full, "x", "full").is_some());
-        assert_eq!(
-            move_error(&full, "a4", "full"),
-            None,
-            "same-parent drop is a no-op"
-        );
-        assert_eq!(move_to_group(&full, "a4", "full").unwrap(), full);
-        assert!(move_error(&full, "g", "g").is_some());
-        assert!(move_error(&full, "x", "a1").is_some());
-        let nested = settings(vec![group("outer", vec![group("inner", vec![])])]);
-        assert!(move_error(&nested, "outer", "inner").is_some());
-    }
-
-    #[test]
-    fn root_parent_and_reorder() {
-        let s = settings(vec![
-            action("a"),
-            group("g", vec![action("b"), group("h", vec![action("c")])]),
-        ]);
-        let root = move_to_root(&s, "c").unwrap();
-        assert_eq!(root.menus[0].items.last().unwrap().id, "c");
-        let parent = move_to_parent(&s, "c").unwrap();
-        assert_eq!(
-            parent.menus[0].items[1]
-                .children
-                .iter()
-                .map(|i| i.id.as_str())
-                .collect::<Vec<_>>(),
-            ["b", "h", "c"]
-        );
-        let reordered = reorder(&s, "g", "a").unwrap();
-        assert_eq!(reordered.menus[0].items[0].id, "g");
-        assert!(reorder(&s, "a", "b").is_err());
-        assert_eq!(move_up(&s, "g").unwrap().menus[0].items[0].id, "g");
-        let full_root = settings(
-            (0..12)
-                .map(|i| action(&format!("r{i}")))
-                .chain([])
-                .collect(),
-        );
-        let mut with_group = full_root.clone();
-        with_group.menus[0].items[11] = group("g", vec![action("z")]);
-        assert!(move_to_root(&with_group, "z").is_err());
-        assert!(move_to_parent(&with_group, "z").is_err());
-    }
-
-    #[test]
     fn group_paths_and_locations() {
         let s = settings(vec![group("g", vec![group("h", vec![action("c")])])]);
         assert_eq!(
@@ -1217,7 +757,6 @@ mod tests {
         let l = s.find("c").unwrap();
         assert_eq!(l.groups, ["g", "h"]);
         assert_eq!(s.get(&l).id, "c");
-        assert_eq!(s.flatten().len(), 3);
     }
 
     #[test]
@@ -1233,17 +772,7 @@ mod tests {
     }
 
     #[test]
-    fn dropped_files_and_foreground() {
-        assert_eq!(
-            dropped_action(r"C:\Tools\Blender.exe", false).unwrap().name,
-            "Blender"
-        );
-        assert_eq!(dropped_action(r"C:\Work\", true).unwrap().name, "Work");
-        assert_eq!(
-            dropped_action(r"C:\s\render.PS1", false).unwrap().kind,
-            Kind::Script
-        );
-        assert!(dropped_action(r"C:\notes.txt", false).is_none());
+    fn foreground_candidates() {
         assert!(foreground_candidate(
             r"C:\Apps\Figma.exe",
             r"C:\Orbit\Orbit.exe"
@@ -1257,40 +786,7 @@ mod tests {
     }
 
     #[test]
-    fn wheel_geometry() {
-        use geometry::*;
-        assert_eq!(sector_at(0.0, -150.0, 8, 84.0, 230.0), Some(0));
-        assert_eq!(sector_at(150.0, 0.0, 8, 84.0, 230.0), Some(2));
-        assert_eq!(sector_at(-150.0, 0.0, 8, 84.0, 230.0), Some(6));
-        assert_eq!(sector_at(0.0, 0.0, 8, 84.0, 230.0), None);
-        assert_eq!(sector_at(0.0, -250.0, 8, 84.0, 230.0), None);
-        for count in [1, 2, 3, 5, 8, 12] {
-            for i in 0..count {
-                let a = slot_angle(i, count);
-                assert_eq!(
-                    sector_at(150.0 * a.cos(), 150.0 * a.sin(), count, 84.0, 230.0),
-                    Some(i)
-                );
-            }
-        }
-        // Gutters: both edges sit exactly 3 units from the shared radial boundary.
-        let count = 8;
-        let (outer, inner) = sector_outline(0, count, 92.0, 207.0, 6.0, 8);
-        let start = -std::f32::consts::PI / 2.0 - std::f32::consts::PI / count as f32;
-        let offset = |p: [f32; 2]| -start.sin() * p[0] + start.cos() * p[1];
-        assert!(
-            (offset(outer[0]) - 3.0).abs() < 0.01
-                && (offset(*inner.first().unwrap()) - 3.0).abs() < 0.01
-        );
-        assert!(label_width(slot_angle(0, 12), 12) > 20.0);
-    }
-
-    #[test]
-    fn words() {
-        assert_eq!(actions_word(1), "дію");
-        assert_eq!(actions_word(3), "дії");
-        assert_eq!(actions_word(11), "дій");
-        assert_eq!(actions_word(22), "дії");
+    fn file_stems() {
         assert_eq!(file_stem(r"C:\a\Render scene.ps1"), "Render scene");
     }
 }

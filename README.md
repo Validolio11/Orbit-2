@@ -2,7 +2,7 @@
 
 Windows-застосунок для швидкого запуску дій через радіальне меню. Дизайн на основі Geist: монохромний інтерфейс, невеликі заокруглення, темна та світла теми.
 
-Orbit — один виконуваний файл на Rust (інтерфейс — [egui](https://github.com/emilk/egui)), без Electron, Node.js чи .NET.
+Orbit — один виконуваний файл на Rust (оболонка — [Tauri 2](https://tauri.app), інтерфейс — HTML/JS у WebView2), без Electron, Node.js чи .NET.
 
 ## Запуск
 
@@ -14,9 +14,10 @@ Orbit — один виконуваний файл на Rust (інтерфейс
 Розробка (Windows x64, [Rust](https://rustup.rs) stable):
 
 ```powershell
-cargo run            # редактор і колесо
-cargo test           # перевірка налаштувань, переміщення дій, геометрії, аргументів, каталогу програм
-cargo build --release
+npm --prefix src-tauri/editor ci && npm --prefix src-tauri/editor run build   # інтерфейс редактора
+cargo run --manifest-path src-tauri/Cargo.toml    # редактор і колесо
+cargo test --manifest-path src-tauri/Cargo.toml   # налаштування, аргументи, каталог програм, колесо
+cargo build --release --manifest-path src-tauri/Cargo.toml
 ```
 
 Під Linux/macOS Orbit теж збирається й запускається для роботи над інтерфейсом, але без перехоплення миші, трею й команд Windows. `ORBIT_DATA_DIR` задає окрему папку налаштувань, `ORBIT_FAKE_APPS` — JSON зі списком програм для діалогу вибору.

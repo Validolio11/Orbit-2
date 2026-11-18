@@ -1,0 +1,27 @@
+/* Tailwind spacing is rem-based: keep rem at 16px (shadcn scale) and body text at 14px. tokens.css sets :root to 14px for the wheel. */
+/* :root, not html: it must out-rank the :root rule in tokens.css. */
+:root { font-size: 16px; }
+body { font-size: 14px; }
+#root { height: 100%; }
+/* tokens.css (shared with the wheel) is unlayered and would stack a second outline on the shadcn focus ring. */
+#root :focus-visible { outline: none; }
+
+@layer components {
+/* Only what Tailwind utilities cannot express: SVG glyphs, the wheel preview, program icons, kind tints, the range slider. */
+.glyph { display: inline-flex; width: 20px; height: 20px; flex: 0 0 auto; align-items: center; justify-content: center; }
+.glyph svg { display: block; width: 100%; height: 100%; }
+.brand .glyph { width: 24px; height: 24px; }
+.brand .brand-top { color: var(--brand); position: absolute; left: 0; }
+#editor-wheel, #editor-wheel-images { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+#editor-wheel-images img { position: absolute; }
+#editor-wheel .sector { cursor: default; }
+.action-icon { display: inline-flex; justify-content: center; align-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: var(--radius-md); }
+.action-icon .glyph { width: 20px; height: 20px; }
+.kind-hexagon, .kind-chip { background: var(--kind-color); color: var(--kind-ink); }
+.kind-app { --kind-color: var(--kind-app); }
+.kind-folder { --kind-color: var(--kind-folder); }
+.kind-script { --kind-color: var(--kind-script); }
+.kind-system { --kind-color: var(--kind-system); }
+.kind-group { --kind-color: var(--kind-group); }
+.program-icon img { display: block; position: absolute; }
+}

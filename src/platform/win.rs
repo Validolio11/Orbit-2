@@ -9,7 +9,7 @@
 
 use super::{AdminStatus, IconImage, InputEvent, Instance, Rect, TrayCommand};
 use std::ffi::c_void;
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU8, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicIsize, AtomicU8, AtomicU32, Ordering};
 use std::sync::{Mutex, OnceLock};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
@@ -22,7 +22,7 @@ use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
-use windows::core::{BOOL, HSTRING, Interface, PCWSTR, PWSTR, w};
+use windows::core::{HSTRING, Interface, PCWSTR, PWSTR, w};
 
 const SERVICE_CLASS: PCWSTR = w!("OrbitService");
 const WM_TRAY: u32 = WM_APP + 1;
@@ -38,6 +38,14 @@ const TRAY_ID: u32 = 1;
 type Sink = Box<dyn Fn(InputEvent) + Send + Sync>;
 static SINK: OnceLock<Sink> = OnceLock::new();
 static SERVICE: AtomicIsize = AtomicIsize::new(0);
+static PREVIOUS_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
+static WRAPPED: AtomicIsize = AtomicIsize::new(0);
+/// How many rows at the top of the wheel window are cut off (the egui window paints a hairline there).
+static TOP_CROP: AtomicI32 = AtomicI32::new(8);
+
+pub fn set_top_crop(rows: i32) {
+    TOP_CROP.store(rows.max(0), Ordering::Relaxed);
+}
 static HOOK: AtomicIsize = AtomicIsize::new(0);
 /// 4 or 5 while the trigger is active, 0 when Orbit is paused.
 static BUTTON: AtomicU8 = AtomicU8::new(0);
@@ -458,38 +466,6 @@ pub fn work_area(x: i32, y: i32) -> (Rect, f32) {
     }
 }
 
-/// A top-level window of this process with exactly this title.
-pub fn find_own_window(title: &str) -> Option<isize> {
-    struct Search {
-        title: Vec<u16>,
-        pid: u32,
-        found: isize,
-    }
-    unsafe extern "system" fn each(hwnd: HWND, data: LPARAM) -> BOOL {
-        let search = &mut *(data.0 as *mut Search);
-        let mut pid = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        if pid == search.pid {
-            let mut text = [0u16; 128];
-            let length = GetWindowTextW(hwnd, &mut text) as usize;
-            if text[..length] == search.title[..] {
-                search.found = hwnd.0 as isize;
-                return false.into();
-            }
-        }
-        true.into()
-    }
-    let mut search = Search {
-        title: title.encode_utf16().collect(),
-        pid: std::process::id(),
-        found: 0,
-    };
-    unsafe {
-        let _ = EnumWindows(Some(each), LPARAM(&mut search as *mut Search as isize));
-    }
-    (search.found != 0).then_some(search.found)
-}
-
 #[link(name = "dwmapi")]
 unsafe extern "system" {
     fn DwmSetWindowAttribute(
@@ -517,11 +493,67 @@ fn strip_frame(hwnd: HWND) {
     }
 }
 
+/// The window's frame and region are set once, while it is still off screen. Changing them on every show
+/// makes the system repaint the window, which flashes.
+/// The wheel window must be a plain popup. Left with the caption and resize border of an ordinary window,
+/// the system paints a white title bar and frame for the first few frames of every show.
+fn ensure_borderless(hwnd: HWND) {
+    const FRAME: u32 = WS_CAPTION.0
+        | WS_THICKFRAME.0
+        | WS_SYSMENU.0
+        | WS_MINIMIZEBOX.0
+        | WS_MAXIMIZEBOX.0
+        | WS_BORDER.0
+        | WS_DLGFRAME.0;
+    unsafe {
+        let style = GetWindowLongPtrW(hwnd, GWL_STYLE) as u32;
+        if style & FRAME == 0 {
+            return;
+        }
+        SetWindowLongPtrW(hwnd, GWL_STYLE, ((style & !FRAME) | WS_POPUP.0) as isize);
+        let _ = SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+}
+
+fn prepare_wheel_window(handle: isize) {
+    ensure_borderless(HWND(handle as *mut c_void));
+    if WRAPPED.swap(handle, Ordering::Relaxed) == handle {
+        return;
+    }
+    unsafe {
+        let hwnd = HWND(handle as *mut c_void);
+        strip_frame(hwnd);
+        // Windows still paints a one-pixel line along the top edge of this borderless window. The wheel
+        // never uses its outermost rows, so the window region leaves the top few out.
+        let crop = TOP_CROP.load(Ordering::Relaxed);
+        if crop > 0 {
+            let region = CreateRectRgn(0, crop, 32000, 32000);
+            if SetWindowRgn(hwnd, Some(region), false) == 0 {
+                let _ = DeleteObject(region.into());
+            }
+        }
+    }
+}
+
 /// Shows a window at a position without waiting for the thread that owns it.
 pub fn place_window(handle: isize, rect: Rect, activate: bool) {
     unsafe {
         let hwnd = HWND(handle as *mut c_void);
-        strip_frame(hwnd);
+        prepare_wheel_window(handle);
+        if activate {
+            let front = GetForegroundWindow();
+            if front != hwnd {
+                PREVIOUS_FOREGROUND.store(front.0 as isize, Ordering::Relaxed);
+            }
+        }
         let mut flags = SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS;
         if !activate {
             flags |= SWP_NOACTIVATE;
@@ -540,26 +572,29 @@ pub fn place_window(handle: isize, rect: Rect, activate: bool) {
         }
     }
 }
+/// Takes the wheel window off the screen without hiding it. A window that is hidden and shown again
+/// flashes a blank white rectangle before its first frame; a parked one keeps its transparent surface.
 pub fn hide_window(handle: isize) {
-    unsafe {
-        let _ = ShowWindowAsync(HWND(handle as *mut c_void), SW_HIDE);
-    }
-}
-pub fn show_window(handle: isize) {
+    prepare_wheel_window(handle);
     unsafe {
         let hwnd = HWND(handle as *mut c_void);
-        let _ = ShowWindowAsync(
+        if GetForegroundWindow() == hwnd {
+            let previous = PREVIOUS_FOREGROUND.load(Ordering::Relaxed);
+            if previous != 0 {
+                let _ = SetForegroundWindow(HWND(previous as *mut c_void));
+            }
+        }
+        let _ = SetWindowPos(
             hwnd,
-            if IsIconic(hwnd).as_bool() {
-                SW_RESTORE
-            } else {
-                SW_SHOW
-            },
+            None,
+            -32000,
+            -32000,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_ASYNCWINDOWPOS,
         );
-        let _ = SetForegroundWindow(hwnd);
     }
 }
-
 // ---------- Launching ----------
 
 pub fn shell_open(target: &str) -> Result<(), String> {

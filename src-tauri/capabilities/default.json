@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "orbit-local",
+  "description": "Local editor and wheel event bridge; native operations use Rust commands.",
+  "windows": ["main", "wheel"],
+  "permissions": ["core:event:default"]
+}

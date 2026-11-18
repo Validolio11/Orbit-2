@@ -119,18 +119,6 @@ fn system(target: &str) -> Result<(), String> {
     }
 }
 
-/// Files and folders dragged in from Explorer that Orbit can launch.
-pub fn inspect_dropped(paths: &[PathBuf]) -> Vec<Action> {
-    paths
-        .iter()
-        .take(50)
-        .filter_map(|p| {
-            let meta = std::fs::metadata(p).ok()?;
-            model::dropped_action(&p.display().to_string(), meta.is_dir())
-        })
-        .collect()
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct FolderTile {
     pub group: &'static str,
@@ -306,4 +294,56 @@ pub fn list_scripts(settings: &Settings) -> (Vec<ScriptTile>, bool) {
         found.into_iter().take(60).map(|(t, _)| t).collect(),
         platform::python_launcher().is_some(),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn act(kind: Kind, target: &str, args: &str) -> Action {
+        Action {
+            id: "t".into(),
+            name: "t".into(),
+            kind,
+            target: target.into(),
+            args: args.into(),
+            icon: String::new(),
+            children: vec![],
+        }
+    }
+
+    /// Every case is rejected before any process would start.
+    #[test]
+    fn invalid_actions_are_rejected_without_starting_anything() {
+        let dir = std::env::temp_dir().join(format!("orbit-launch-{}", model::new_id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = |name: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, "x").unwrap();
+            path.display().to_string()
+        };
+        let (lnk, txt, xyz) = (file("a.lnk"), file("a.txt"), file("a.xyz"));
+        let cases = [
+            (act(Kind::App, "  ", ""), "Спочатку виберіть"),
+            (act(Kind::System, "", ""), "Спочатку виберіть"),
+            (act(Kind::Group, r"C:\x.exe", ""), "Відкрийте групу"),
+            (act(Kind::App, "tool.exe", ""), "повний шлях"),
+            (
+                act(Kind::App, r"C:\orbit-missing\no.exe", ""),
+                "не знайдено",
+            ),
+            (
+                act(Kind::App, &dir.display().to_string(), ""),
+                "файл .exe або .lnk",
+            ),
+            (act(Kind::App, &lnk, "--flag"), "аргументи у властивостях"),
+            (act(Kind::App, &txt, ""), "файл .exe або .lnk"),
+            (act(Kind::Script, &xyz, ""), "скрипти .ps1"),
+        ];
+        for (action, expected) in cases {
+            let error = execute(&action).expect_err(&format!("{:?} must fail", action.target));
+            assert!(error.contains(expected), "{error:?} lacks {expected:?}");
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
