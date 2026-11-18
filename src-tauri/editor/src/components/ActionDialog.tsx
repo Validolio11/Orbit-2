@@ -111,12 +111,19 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
   const [more, setMore] = useState(false);
   const [error, setError] = useState('');
   const set = (patch: Partial<Fields>) => { setFields((current) => ({ ...current, ...patch })); setError(''); };
-  const pickKind = (kind: Kind) => set({ kind, target: kind === 'system' ? SYSTEM_ACTIONS[0][0] : '', args: '' });
+
   // A name filled in from a pick follows later picks; one the user typed stays.
   const autoName = useRef('');
   const named = (suggested: string) => { const keep = fields.name.trim() && fields.name !== autoName.current; if (!keep) autoName.current = suggested; return keep ? fields.name : suggested; };
   const pickPath = (target: string, name: string) => set({ target, name: named(name) });
-  const pickSystem = (target: string) => set({ target, name: fields.name.trim() ? fields.name : SYSTEM_ACTIONS.find(([id]) => id === target)?.[1] ?? '' });
+  // Switching kind drops the old target and any name that came from it; a typed name stays.
+  const pickKind = (kind: Kind) => {
+    const replace = !fields.name.trim() || fields.name === autoName.current;
+    const name = kind === 'system' ? SYSTEM_ACTIONS[0][1] : '';
+    if (replace) autoName.current = name;
+    set({ kind, target: kind === 'system' ? SYSTEM_ACTIONS[0][0] : '', args: '', ...(replace ? { name } : {}) });
+  };
+  const pickSystem = (target: string) => set({ target, name: named(SYSTEM_ACTIONS.find(([id]) => id === target)?.[1] ?? '') });
   const browse = async () => {
     try {
       const path = fields.kind === 'folder' ? await invoke('pick_folder') : await invoke('pick_file', { kind: fields.kind === 'script' ? 'script' : 'app' });

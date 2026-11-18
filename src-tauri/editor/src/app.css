@@ -17,7 +17,7 @@ body { font-size: 14px; }
 #editor-wheel .sector { cursor: default; }
 .action-icon { display: inline-flex; justify-content: center; align-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: var(--radius-md); }
 .action-icon .glyph { width: 20px; height: 20px; }
-.kind-hexagon, .kind-chip { background: var(--kind-color); color: var(--kind-ink); }
+.kind-hexagon { background: var(--kind-color); color: var(--kind-ink); }
 .kind-app { --kind-color: var(--kind-app); }
 .kind-folder { --kind-color: var(--kind-folder); }
 .kind-script { --kind-color: var(--kind-script); }

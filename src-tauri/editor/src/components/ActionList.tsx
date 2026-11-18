@@ -43,7 +43,7 @@ export function ActionList({ entries, selected, library = false, onSelect, onDel
         <span className="w-4.5 flex-none text-center font-mono text-xs text-muted-foreground/70">{index + 1}</span>{action.kind === 'app' ? <ProgramIcon action={action} /> : <HexIcon kind={action.kind} glyph={action.icon || action.kind} />}
         <span className="grid min-w-0 gap-0.5"><strong className="truncate text-sm font-semibold">{action.name}</strong><span className="truncate text-xs text-muted-foreground" title={description}>{description}</span>{library && <span className="truncate text-xs text-muted-foreground/70">{context}</span>}</span>
       </button>
-      {library && <Badge variant="ghost" className={`kind-chip kind-${action.kind}`}>{KIND_NAMES[action.kind]}</Badge>}
+      {library && <Badge variant="outline" className="text-muted-foreground" data-kind={action.kind}>{KIND_NAMES[action.kind]}</Badge>}
       <div className="flex flex-none gap-0 pr-1">{groupIds.length > 0 && tool(action.id, 'back', 'Перемістити на рівень вище', 'move-out')}{tool(action.id, 'arrowUp', 'Перемістити вгору', 'move-up')}{tool(action.id, 'arrowDown', 'Перемістити вниз', 'move-down')}{tool(action.id, 'edit', 'Редагувати дію', 'edit-action')}<Button glyph="trash" size="icon" variant="ghost" className="size-7 text-muted-foreground hover:bg-destructive/15 hover:text-destructive" data-action="delete-action" data-id={action.id} data-focus={`delete-${action.id}`} title={`Видалити ${action.name}`} aria-label={`Видалити ${action.name}`} onClick={() => onDelete(action.id)} /></div>
     </div>;
   })}</>;

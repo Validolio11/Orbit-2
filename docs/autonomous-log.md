@@ -54,3 +54,20 @@ screenshots of all pages in both themes, 0/5/12 actions.
 
 Lesson: overriding CardHeader's grid with `flex … items-center` (tailwind-merge drops `grid`) is the clean way to
 centre a title against a button; `grid-rows-[auto_auto]` otherwise leaves an empty second row and an 8 px offset.
+
+## Block 3 — 2026-11-18: library, dialogs, names
+
+Changed
+- Library kind badges are neutral `outline` badges: the kind colour already shows on the icon, a second coloured
+  chip per row was decorative noise. `.kind-chip` CSS removed.
+- Library search uses the shadcn `Input` with the same search-icon pattern as the dialog (was a hand-rolled field).
+- Create-menu dialog: shadcn-style description, inline `role="alert"` error with `aria-invalid` instead of the
+  browser's native validation bubble (which ignores the theme in WebView2), form spaced with `grid gap-4`.
+- Action dialog names: switching kind clears a name that came from a pick (a script name no longer lands in a group);
+  Windows commands suggest their own label on switch and on pick; typed names are always kept.
+- Removed `hyphens-auto` from tiles again: it hyphenated "ро-бочий" where a plain break at the space reads better.
+  The px-1.5 padding alone keeps "Завантаження" whole.
+
+Verified: tsc; vitest 33 (create-menu error, kind-switch names); node 21; cargo 22; screenshots of every dialog.
+
+Lesson: try a typographic fix on every grid that uses the shared tile, not just the one that prompted it.

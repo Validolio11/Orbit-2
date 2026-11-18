@@ -199,7 +199,13 @@ describe("React editor shell and native events", () => {
     const env = setup(); await mount();
     await click('[data-action="create-menu"]');
     expect(element("#editor-dialog").getAttribute("data-state")).toBe("open");
-    await change("#menu-name", "  Робота  ", "input"); await submitDialog();
+    await change("#menu-name", "   ", "input"); await submitDialog();
+    expect(element("#menu-name-error").textContent).toBe("Введіть назву меню.");
+    expect(element("#menu-name").getAttribute("aria-invalid")).toBe("true");
+    expect(env.native().settings.menus).toHaveLength(1);
+    await change("#menu-name", "  Робота  ", "input");
+    expect(document.querySelector("#menu-name-error")).toBeNull();
+    await submitDialog();
     expect(env.native().settings.menus).toHaveLength(2);
     expect(env.native().settings.menus[1].name).toBe("Робота");
     expect(env.native().settings.activeMenuId).toBe(env.native().settings.menus[1].id);
@@ -279,6 +285,12 @@ describe("React editor shell and native events", () => {
     await key('[data-kind="script"]', "ArrowLeft");
     expect(document.activeElement?.getAttribute("data-kind")).toBe("folder");
     expect(element('[data-kind="folder"]').getAttribute("aria-checked")).toBe("true");
+    // The suggested script name does not follow into another kind; Windows commands suggest their own.
+    expect((element("#action-name") as HTMLInputElement).value).toBe("");
+    await click('[data-kind="system"]');
+    expect((element("#action-name") as HTMLInputElement).value).toBe("Провідник");
+    await click('[data-system="notepad"]');
+    expect((element("#action-name") as HTMLInputElement).value).toBe("Блокнот");
   });
 
   it("falls back to manual entry when the folder list cannot be read", async () => {
