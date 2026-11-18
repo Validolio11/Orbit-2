@@ -36,3 +36,21 @@ Chose not to: add a search box to folders (lists are short); add new Rust comman
 tested on the Rust side); show script tiles in a nested scroll for folders (removed — one scroll area per dialog).
 
 Lesson: CSS attribute selectors need escaped backslashes for Windows paths in tests (`tile()` helper).
+
+## Block 2 — 2026-11-18: official Card, page headers, duplicate setting
+
+Changed
+- `components/ui/card.tsx` is now the official new-york-v4 Card (Card, CardHeader, CardTitle, CardDescription,
+  CardAction, CardContent, CardFooter with `data-slot`), only the `cn` import adapted.
+- Pages stay tidy by composing it: `Panel` = Card with `gap-0 py-0 overflow-hidden` (rows run edge to edge with
+  their own `px-6` hairlines) and `role="region"` when labelled; `Section` = CardHeader + CardTitle (heading level 2)
+  + CardDescription. Menu panels use CardHeader/CardTitle/CardAction; footers use CardFooter with `border-t`.
+- Removed the "Попередній перегляд" label from the wheel card header (the footer already says it).
+- Removed the "Поведінка колеса" section from Settings: its only row duplicated "Закривати меню натисканням поза
+  ним" on the Controls page (same setting, same id). One place per setting, less noise.
+
+Verified: tsc, vitest 33, node wheel tests 21, cargo test 22 (Linux, webkit2gtk dev libs installed for the check);
+screenshots of all pages in both themes, 0/5/12 actions.
+
+Lesson: overriding CardHeader's grid with `flex … items-center` (tailwind-merge drops `grid`) is the clean way to
+centre a title against a button; `grid-rows-[auto_auto]` otherwise leaves an empty second row and an 8 px offset.

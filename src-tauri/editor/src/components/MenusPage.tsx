@@ -2,7 +2,7 @@ import { activeMenu, ACTIVATION_NAMES, actionsWord } from '../editor-state';
 import { Button, Header, Panel } from './Facet';
 import { ActionList } from './ActionList';
 import { WheelPreview } from './WheelPreview';
-import { CardFooter, CardHeader } from './ui/card';
+import { CardAction, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 
 const quiet = 'flex min-h-24 flex-col justify-center gap-1.5 rounded-xl border bg-card p-4 text-left outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50';
@@ -19,8 +19,8 @@ export function MenusPage({ state, ui, onPage, onSelect, onActivateMenu, onComma
     </div>
     <Tabs value={menu?.id ?? ''} onValueChange={onActivateMenu} className="mb-4"><TabsList aria-label="Меню">{s.menus.map((tab) => <TabsTrigger key={tab.id} value={tab.id} data-action="activate-menu" data-id={tab.id} data-focus={`menu-${tab.id}`}>{tab.name}<span className="font-mono text-xs opacity-70">{tab.items.length}</span></TabsTrigger>)}</TabsList></Tabs>
     <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] items-start gap-6 max-[1150px]:gap-4 max-[900px]:grid-cols-1">
-      <Panel className="preview-panel" aria-label="Попередній перегляд колеса"><CardHeader><h2 className="text-base font-semibold">{menu?.name || 'Orbit'}</h2><span className="text-xs text-muted-foreground max-[1150px]:hidden">Попередній перегляд</span></CardHeader><WheelPreview settings={s} selected={ui.selected} /><CardFooter>Попередній перегляд · виберіть дію у списку</CardFooter></Panel>
-      <Panel className="action-panel" aria-labelledby="actions-title"><CardHeader><h2 id="actions-title" className="text-base font-semibold">Дії в меню <span className="font-mono text-xs text-muted-foreground">{items.length}</span></h2><Button glyph="plus" size="sm" data-action="add-action" data-focus="add-action" disabled={items.length >= 12} title={items.length >= 12 ? 'У меню може бути до 12 дій.' : 'Додати дію'} onClick={() => onCommand('add-action')}>Додати дію</Button></CardHeader><div className="pb-2"><ActionList entries={items.map((action) => ({ action }))} selected={ui.selected} onSelect={onSelect} onDelete={(id) => onCommand('delete-action', id)} onCommand={onCommand} /></div></Panel>
+      <Panel className="preview-panel" aria-label="Попередній перегляд колеса"><CardHeader className="flex min-h-14 items-center justify-between py-4"><CardTitle role="heading" aria-level={2}>{menu?.name || 'Orbit'}</CardTitle></CardHeader><WheelPreview settings={s} selected={ui.selected} /><CardFooter className="border-t py-4 text-xs text-muted-foreground">Попередній перегляд · виберіть дію у списку</CardFooter></Panel>
+      <Panel className="action-panel" aria-labelledby="actions-title"><CardHeader className="flex min-h-14 items-center justify-between py-4"><CardTitle role="heading" aria-level={2} id="actions-title">Дії в меню <span className="font-mono text-xs font-normal text-muted-foreground">{items.length}</span></CardTitle><CardAction><Button glyph="plus" size="sm" data-action="add-action" data-focus="add-action" disabled={items.length >= 12} title={items.length >= 12 ? 'У меню може бути до 12 дій.' : 'Додати дію'} onClick={() => onCommand('add-action')}>Додати дію</Button></CardAction></CardHeader><div className="pb-2"><ActionList entries={items.map((action) => ({ action }))} selected={ui.selected} onSelect={onSelect} onDelete={(id) => onCommand('delete-action', id)} onCommand={onCommand} /></div></Panel>
     </div><p className="mt-4 text-xs text-muted-foreground/70" id="save-note">Зміни зберігаються автоматично</p>
   </>;
 }
