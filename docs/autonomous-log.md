@@ -176,3 +176,32 @@ Recommended next
 2. (Decided in Block 5: the sidebar theme switch was removed; Settings → Тема is the single place.)
 3. If the picker tiles feel top-heavy with one-line labels, try a slightly shorter tile; keep the two-line reservation.
 4. Only after that: "Клавіші" and "Текст" kinds, with optional fields and an old-settings fixture test.
+
+## Release — 2026-11-18: Orbit 2 3.0.0
+
+Owner stopped the autonomous schedule and then asked to merge everything into the original and release. Asked once
+which original was meant (the branch is the Rust/Tauri app; Validolio11/Orbit-2 main was the Electron Orbit 2 2.3.1).
+Owner chose: replace 2.3.1 in Validolio11/Orbit-2.
+
+Found and fixed first
+- `ci.yml` had a real tab and carriage return inside the self-test path, so GitHub never ran a Windows job on this
+  branch: every "green" before this point was Linux only. Repaired; the first Windows runs passed (vitest, node,
+  cargo test, release build, self-test).
+- `release.yml` still built a root crate that no longer exists; it now builds src-tauri like CI and publishes
+  `Orbit-<v>-windows-x64.exe`, `Orbit-Setup-<v>.exe`, `SHA256SUMS.txt`.
+
+Released
+- Version 3.0.0 (sorts after 2.3.1); in-app updater reads Validolio11/Orbit-2.
+- main = merge commit e454c8e whose tree equals the branch; Electron 2.x stays in history; no force push.
+- Tag pushes are refused for this session (HTTP 403), so the release ran through "Run workflow" on main, which tags
+  the commit itself: https://github.com/Validolio11/Orbit-2/releases/tag/v3.0.0 (latest, three assets, installer
+  smoke test passed on the runner).
+
+Known consequences (accepted by the owner)
+- Orbit 2 2.3.1 will not auto-install 3.0.0 (its updater only accepts the Electron zip): install once by hand.
+- Quit or uninstall Electron Orbit 2 first, otherwise both apps listen to the same side button.
+- Orbit 2 menus are not migrated; 3.0.0 uses %APPDATA%\Orbit (it may load menus from the original Orbit) and leaves
+  the Orbit 2 settings folder untouched. 2.1–2.3.1 features are absent. The app and release are titled "Orbit".
+
+Lesson: check that CI actually runs on the target OS before calling a tree green; a workflow with zero jobs reports
+"failure" silently.
