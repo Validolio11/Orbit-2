@@ -148,11 +148,24 @@ impl Store {
 pub const REVISION_MOVED: &str =
     "Налаштування змінилися в іншому місці. Оновіть їх і повторіть зміну.";
 
+/// Writes beside the target first, so a failed export never leaves a truncated file where an older export was.
 pub fn export(file: &Path, settings: &Settings) -> std::io::Result<()> {
-    fs::write(
-        file,
-        serde_json::to_string_pretty(settings).unwrap_or_default(),
-    )
+    let text = serde_json::to_string_pretty(settings)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let mut temp = file.as_os_str().to_owned();
+    temp.push(".orbit-tmp");
+    let temp = PathBuf::from(temp);
+    let written = fs::File::create(&temp).and_then(|mut handle| {
+        handle.write_all(text.as_bytes())?;
+        handle.sync_all()
+    });
+    match written.and_then(|()| fs::rename(&temp, file)) {
+        Ok(()) => Ok(()),
+        Err(error) => {
+            let _ = fs::remove_file(&temp);
+            Err(error)
+        }
+    }
 }
 pub fn import(file: &Path) -> Result<Settings, String> {
     let size = fs::metadata(file).map_err(|e| e.to_string())?.len();
@@ -207,6 +220,47 @@ mod tests {
         let s = store.get();
         assert_eq!((s.hover_delay, s.wheel_size), (229, 429));
         assert_eq!(store.revision(), 61);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn export_round_trips_through_import_and_replaces_an_older_export() {
+        let dir = std::env::temp_dir().join(format!("orbit-test-{}", model::new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("orbit-settings.json");
+        fs::write(&file, "older export").unwrap();
+        let mut settings = model::default_settings(r"C:\Docs", vec![]);
+        settings.hover_delay = 640;
+        export(&file, &settings).unwrap();
+        let back = import(&file).unwrap();
+        assert_eq!(
+            serde_json::to_value(&back).unwrap(),
+            serde_json::to_value(&settings).unwrap()
+        );
+        let leftovers: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name())
+            .collect();
+        assert_eq!(
+            leftovers,
+            vec![std::ffi::OsString::from("orbit-settings.json")]
+        );
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn import_rejects_files_that_are_not_orbit_settings() {
+        let dir = std::env::temp_dir().join(format!("orbit-test-{}", model::new_id()));
+        fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("other.json");
+        for text in ["", "[]", "{\"version\": 2}", "not json"] {
+            fs::write(&file, text).unwrap();
+            assert!(import(&file).is_err(), "{text:?} should be rejected");
+        }
+        fs::write(&file, vec![b' '; 1024 * 1024 + 1]).unwrap();
+        assert_eq!(import(&file).unwrap_err(), "Файл налаштувань завеликий.");
+        assert!(import(&dir.join("missing.json")).is_err());
         let _ = fs::remove_dir_all(dir);
     }
 
