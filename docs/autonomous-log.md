@@ -71,3 +71,77 @@ Changed
 Verified: tsc; vitest 33 (create-menu error, kind-switch names); node 21; cargo 22; screenshots of every dialog.
 
 Lesson: try a typographic fix on every grid that uses the shared tile, not just the one that prompted it.
+
+## Block 4 — 2026-11-18: wheel audit, command errors, export, tile alignment
+
+Re-read this log first; applied "try a fix on every grid that uses the shared tile" (Block 3 lesson).
+
+Changed
+- Wheel: no code change. Screenshots of 1–12 actions × dark/light × idle / keyboard selection / mouse hover without
+  the add slot, reviewed as contact sheets and zoomed crops. Full ring at every count (one action = one ring with a
+  single seam), digits on one radius between hub and icon (1–9, then Q W E for 10–12), labels hidden from 8 actions
+  on, group pip clear of neighbours, hub text and menu dots centred, selected sector readable in both themes.
+- `errorMessage()` in `api.ts`: command failures become plain Ukrainian text. Rust rejects with strings (kept),
+  JS `Error`s lost their English "Error:" prefix, `{ message }` objects are read, empty failures get a sentence.
+  Used by toasts, the load-error screen, the action dialog and the path pickers (replaced a local helper there).
+- Installed-app picker: a rejected `catalog_search` now says the list could not be read instead of "nothing found".
+- `storage::export` no longer writes `unwrap_or_default()` (an empty file) on a serialization error; it writes and
+  syncs a sibling temp file and renames it over the target, removing the temp on failure, so a failed export never
+  truncates an older one.
+- Tiles: labels reserve two lines (`TILE_LABEL`), script tiles reserve two name lines plus the detail line, so
+  icons line up across a row in the app, folder, script and Windows-command grids (a wrapped label used to lift its
+  icon ~8 px). Folder/script icons are size-5 like the Windows-command tiles to keep 8 px padding.
+
+Verified: tsc; vitest 38 (new: `api.test.ts` error cases, catalog failure, no "Error:" on the load screen); node
+wheel tests 21; cargo test 24 (new: export→import round trip with no leftover files; import rejects empty, array,
+wrong version, non-JSON, oversized and missing files); cargo check; screenshots of all pages and dialogs, both themes.
+No settings format change in this block, so no new old-settings fixture was needed (`reads_the_electron_settings_format`
+and the backup-recovery test still cover old files).
+
+Chose not to:
+- Hide "Скинути до 100%" at the default size: disabled is the shadcn pattern, and a button that vanishes on click
+  drops keyboard focus.
+- Remove the sidebar theme switch even though Settings also has Theme: it is a quick toggle the owner may use daily;
+  flagged below for the owner instead of deciding alone.
+- Truncate long tile names to one line: "Локальний диск (C:)" would lose its drive letter.
+- Add the "Клавіші" / "Текст" kinds: out of scope until a human has confirmed the current work on Windows.
+
+Lesson: when a fixed-height tile centres its content, any wrapping label moves the icon; reserve the label's
+maximum height instead of centring variable content.
+
+## Final summary — 2026-11-18
+
+Branch `orbit2/autonomous-improve`, all gates green at the last push: `npx tsc --noEmit`, `npx vitest run` (38),
+`node --test ui/wheel.test.mjs ui/wheel-geometry.test.mjs` (21), `cargo test` (24) and `cargo check` for the Tauri crate.
+`main` untouched, no tags, releases or force-pushes; a draft PR is left unmerged for review.
+
+Done
+- Folder picker (quick access, standard folders, drives) and script discovery (.ps1 .py .js .cjs) as tiles fed by the
+  Rust commands, manual path entry kept, native pickers kept.
+- One keyboard model for every tile grid (roving tab stop, arrows, Home/End); radio-style grids select as you move.
+- Official new-york-v4 `Card`; pages composed from it; duplicate "close on outside click" setting removed.
+- Quieter library rows (neutral badges), shadcn search inputs, themed inline validation in the create-menu dialog.
+- Name handling: picked names follow later picks, typed names are always kept, kind switches clear picked names.
+- Loading / empty / error states for every native list; readable error text at the command boundary; safer export;
+  import validation covered by tests.
+- Tile icons aligned regardless of label length.
+- Wheel audited at 1–12 actions in both themes; no overlaps found.
+
+Verified only here (Linux, headless Chromium with a mocked `window.__TAURI__`, Rust tests on Linux)
+- Layout, spacing, states and keyboard behaviour of the editor bundle; wheel rendering of `wheel.html`; Rust logic.
+
+Needs a human on Windows (cannot be checked from the cloud)
+- WebView2 rendering: Segoe/real fonts, DPI scaling at 125–200 %, the `2lh` tile labels (Chromium 109+, fine on
+  evergreen WebView2), native window chrome.
+- Real data in the pickers: the user's Quick access folders, OneDrive, drives, scripts on Desktop/Documents/Downloads,
+  Python detection, real .exe icons in the app picker and action list.
+- Mouse hook, side buttons, Ctrl+Space, wheel opening over other windows, admin mode, launching folders/scripts.
+- Export/import through the native save/open dialogs, including replacing an existing export file.
+- That the owner's existing `%APPDATA%\Orbit\settings.json` loads unchanged (no format change was made on this branch).
+
+Recommended next
+1. Owner: run the branch build on Windows, rate icons, wheel and app separately, and note anything that looks wide,
+   touching or noisy.
+2. Decide whether the sidebar theme switch should stay now that Settings has the same control.
+3. If the picker tiles feel top-heavy with one-line labels, try a slightly shorter tile; keep the two-line reservation.
+4. Only after that: "Клавіші" and "Текст" kinds, with optional fields and an old-settings fixture test.
