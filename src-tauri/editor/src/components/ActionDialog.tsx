@@ -1,5 +1,5 @@
 import { Check, Search } from 'lucide-react';
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { cn } from '../lib/utils';
 import { invoke, listen } from '../api';
 import { fileStem, KIND_NAMES, SYSTEM_ACTIONS } from '../editor-state';
@@ -9,6 +9,8 @@ import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { FolderPicker, ScriptPicker } from './PathPickers';
+import { columnsOf, gridKeys, SectionHead, TILE, TILE_GRID } from './tiles';
 
 export type ActionDialogRequest = { mode: 'add' } | { mode: 'edit'; entry: ActionEntry };
 type Fields = { kind: Kind; name: string; target: string; args: string };
@@ -35,8 +37,8 @@ export function ActionDialog({ request, onClose, onSubmit }: {
 
 type Installed = { name: string; target: string; args: string };
 const ICON_SIZE = 32;
-// The tile grid is auto-fill, so the step between rows is read from the laid-out columns.
-const columnsOf = (list: HTMLElement | null) => Math.max(1, (list ? getComputedStyle(list).gridTemplateColumns : '').split(' ').filter(Boolean).length);
+// Radio-style tile groups select as the arrows move, like native radio buttons.
+const clickTile = (tile: HTMLElement) => tile.click();
 function AppIcon({ target }: { target: string }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -82,11 +84,11 @@ function InstalledApps({ selected, onPick, onBrowse, onUrl }: { selected: string
     <div className="relative">
       <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
       <Input id="installed-search" aria-label="Програма зі списку" type="search" className="h-10 pl-9" value={query} placeholder="Пошук серед встановлених програм" autoFocus autoComplete="off" onKeyDown={onKeyDown} onChange={(event) => setQuery(event.target.value)} /></div>
-    <ul id="installed-apps" ref={list} aria-label="Встановлені програми" className="-mr-2 grid max-h-[clamp(7rem,30vh,17rem)] grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2 overflow-y-auto pr-2">
+    <ul id="installed-apps" ref={list} aria-label="Встановлені програми" className={cn(TILE_GRID, '-mr-2 max-h-[clamp(7rem,30vh,17rem)] overflow-y-auto pr-2')} onKeyDown={gridKeys((tile) => setActive(Number(tile.dataset.index)))}>
       {result.entries.map((app, index) => {
         const chosen = app.target === selected;
         return <li key={`${app.target}|${app.args}`} className="contents">
-          <button type="button" data-installed={app.name} data-active={index === active} aria-current={chosen || undefined}
+          <button type="button" data-tile data-index={index} tabIndex={index === active ? 0 : -1} data-installed={app.name} data-active={index === active} aria-current={chosen || undefined}
             className={cn(TILE, 'h-[5.5rem]', index === active && 'bg-accent')} onMouseEnter={() => setActive(index)} onClick={() => onPick(app)}>
             <AppIcon target={app.target} /><span className="line-clamp-2 w-full leading-tight break-words">{app.name}</span>{chosen && <Check className="absolute top-1.5 right-1.5 size-3.5 text-brand" aria-label="Вибрано" />}</button></li>;
       })}
@@ -95,17 +97,12 @@ function InstalledApps({ selected, onPick, onBrowse, onUrl }: { selected: string
     <p className="text-xs text-muted-foreground">Клацніть програму, щоб вибрати її. Стрілки та Enter теж працюють.</p></section>;
 }
 
-// One tile look for every picker: bare icon over the label, the chosen one marked by the accent border.
-const TILE = 'relative flex flex-col items-center justify-center gap-2 rounded-lg border px-2 text-center text-xs font-medium transition-colors outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-[current=true]:border-brand aria-[current=true]:bg-brand/10 aria-[current=true]:text-foreground';
 const SYSTEM_ICONS: Record<string, string> = {
   explorer: 'folder', 'task-manager': 'chart', settings: 'settings', 'control-panel': 'sliders', 'recycle-bin': 'trash', search: 'search', run: 'run',
   'task-view': 'layers', desktop: 'desktop', lock: 'lock', screenshot: 'screenshot', clipboard: 'clipboard', emoji: 'emoji', dictation: 'mic',
   notifications: 'bell', mute: 'volumeMute', 'volume-down': 'volumeDown', 'volume-up': 'volumeUp', 'sound-settings': 'volume', bluetooth: 'bluetooth',
   'media-prev': 'trackPrev', 'media-play': 'playPause', 'media-next': 'trackNext', calculator: 'calculator', notepad: 'notepad',
 };
-function SectionHead({ title, children }: { title: string; children?: ReactNode }) {
-  return <div className="flex min-h-8 items-center justify-between gap-2"><h3 className="text-sm font-semibold">{title}</h3><div className="flex gap-1">{children}</div></div>;
-}
 
 function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogRequest; onClose: () => void; onSubmit: (fields: Fields, existing: Action | null) => boolean }) {
   const editing = request.mode === 'edit', existing = request.mode === 'edit' ? request.entry.action : null;
@@ -115,11 +112,15 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
   const [error, setError] = useState('');
   const set = (patch: Partial<Fields>) => { setFields((current) => ({ ...current, ...patch })); setError(''); };
   const pickKind = (kind: Kind) => set({ kind, target: kind === 'system' ? SYSTEM_ACTIONS[0][0] : '', args: '' });
+  // A name filled in from a pick follows later picks; one the user typed stays.
+  const autoName = useRef('');
+  const named = (suggested: string) => { const keep = fields.name.trim() && fields.name !== autoName.current; if (!keep) autoName.current = suggested; return keep ? fields.name : suggested; };
+  const pickPath = (target: string, name: string) => set({ target, name: named(name) });
   const pickSystem = (target: string) => set({ target, name: fields.name.trim() ? fields.name : SYSTEM_ACTIONS.find(([id]) => id === target)?.[1] ?? '' });
   const browse = async () => {
     try {
       const path = fields.kind === 'folder' ? await invoke('pick_folder') : await invoke('pick_file', { kind: fields.kind === 'script' ? 'script' : 'app' });
-      if (path) set({ target: path, name: fields.name.trim() ? fields.name : fileStem(path) });
+      if (path) pickPath(path, fileStem(path));
     } catch (failure) { setError(String(failure)); }
   };
   const submit = () => {
@@ -139,19 +140,22 @@ function ActionForm({ request, onClose, onSubmit }: { request: ActionDialogReque
   return <form noValidate onSubmit={(event) => { event.preventDefault(); submit(); }} className="flex min-h-0 flex-1 flex-col">
     <DialogHeader className="border-b px-6 py-4"><DialogTitle id="action-dialog-title">{editing ? 'Редагувати дію' : 'Додати дію'}</DialogTitle></DialogHeader>
     <div className="grid min-h-0 flex-1 content-start gap-5 overflow-y-auto px-6 py-5">
-      <div role="radiogroup" id="action-kind" aria-label="Тип дії" className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
-        {KINDS.map((kind) => <button key={kind} type="button" role="radio" aria-checked={fields.kind === kind} aria-current={fields.kind === kind || undefined} data-kind={kind} disabled={editing && existing?.kind === 'group'} onClick={() => pickKind(kind)}
+      <div role="radiogroup" id="action-kind" aria-label="Тип дії" className={TILE_GRID} onKeyDown={gridKeys(clickTile)}>
+        {KINDS.map((kind) => <button key={kind} type="button" data-tile role="radio" tabIndex={fields.kind === kind ? 0 : -1} aria-checked={fields.kind === kind} aria-current={fields.kind === kind || undefined} data-kind={kind} disabled={editing && existing?.kind === 'group'} onClick={() => pickKind(kind)}
           className={cn(TILE, 'h-16 gap-1.5 text-muted-foreground disabled:opacity-40')}><Icon name={kind} className="size-5" />{KIND_NAMES[kind]}</button>)}
       </div>
-      {picking && <InstalledApps selected={fields.target} onBrowse={() => { void browse(); }} onUrl={showUrl} onPick={(app) => { set({ target: app.target, args: app.args, name: app.name }); nameInput.current?.focus(); nameInput.current?.select(); }} />}
+      {picking && <InstalledApps selected={fields.target} onBrowse={() => { void browse(); }} onUrl={showUrl} onPick={(app) => { autoName.current = app.name; set({ target: app.target, args: app.args, name: app.name }); nameInput.current?.focus(); nameInput.current?.select(); }} />}
       {fields.kind === 'system' && <section className="grid gap-3"><SectionHead title={sectionTitle} />
-        <div id="action-system" role="radiogroup" aria-label="Команда Windows" className="grid grid-cols-[repeat(auto-fill,minmax(6.5rem,1fr))] gap-2">
-          {SYSTEM_ACTIONS.map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={fields.target === id} aria-current={fields.target === id || undefined} data-system={id} className={cn(TILE, 'h-[4.5rem] gap-1.5 leading-tight')} onClick={() => pickSystem(id)}>
+        <div id="action-system" role="radiogroup" aria-label="Команда Windows" className={TILE_GRID} onKeyDown={gridKeys(clickTile)}>
+          {SYSTEM_ACTIONS.map(([id, label], index) => <button key={id} type="button" data-tile role="radio" tabIndex={fields.target === id || (index === 0 && !SYSTEM_ACTIONS.some(([known]) => known === fields.target)) ? 0 : -1} aria-checked={fields.target === id} aria-current={fields.target === id || undefined} data-system={id} className={cn(TILE, 'h-[4.5rem] gap-1.5 leading-tight')} onClick={() => pickSystem(id)}>
             <Icon name={SYSTEM_ICONS[id] ?? 'system'} className="size-5" /><span className="line-clamp-2 w-full break-words">{label}</span></button>)}
         </div></section>}
       {(fields.kind === 'folder' || fields.kind === 'script') && <section className="grid gap-3"><SectionHead title={sectionTitle}>
         <Button variant="ghost" size="sm" data-action="browse" onClick={() => { void browse(); }}><Icon name={fields.kind === 'folder' ? 'folder' : 'script'} />{fields.kind === 'folder' ? 'Обрати папку…' : 'Обрати файл…'}</Button></SectionHead>
-        <div className="grid gap-2"><Label htmlFor="action-target" className="sr-only">{fields.kind === 'folder' ? 'Папка' : 'Скрипт'}</Label>
+        {fields.kind === 'folder'
+          ? <FolderPicker selected={fields.target} onPick={(folder) => pickPath(folder.path, folder.name)} />
+          : <ScriptPicker selected={fields.target} onPick={(script) => pickPath(script.path, script.name)} />}
+        <div className="grid gap-2"><Label htmlFor="action-target">{fields.kind === 'folder' ? 'Шлях до папки' : 'Шлях до скрипту'}</Label>
           <Input id="action-target" className="h-10" value={fields.target} maxLength={4096} placeholder={TARGET_HINT[fields.kind]} onChange={(event) => set({ target: event.target.value })} /></div></section>}
       {fields.kind !== 'system' && <div className="grid gap-2"><Label htmlFor="action-name">{fields.kind === 'group' ? 'Назва групи' : 'Назва в колесі'}</Label>
         <Input ref={nameInput} id="action-name" className="h-10" value={fields.name} maxLength={100} placeholder={fields.kind === 'group' ? 'Нова група' : 'Наприклад, Браузер'} autoFocus={editing || fields.kind !== 'app'} onChange={(event) => set({ name: event.target.value })} />

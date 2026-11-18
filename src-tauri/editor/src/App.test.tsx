@@ -46,7 +46,7 @@ afterEach(async () => {
   delete document.documentElement.dataset.reducedMotion;
 });
 
-function setup({ failFirstRead = false, deferSubscriptions = false } = {}) {
+function setup({ failFirstRead = false, deferSubscriptions = false, failFolders = false } = {}) {
   let native = initialState(), reads = 0;
   const calls: Call[] = [], listeners = new Map<string, NativeListener>(), unsubscribed: string[] = [];
   const queued: AppEvent[] = [], resolveListeners: Array<() => void> = [];
@@ -68,6 +68,19 @@ function setup({ failFirstRead = false, deferSubscriptions = false } = {}) {
       }
       if (command === "take_events") return queued.splice(0);
       if (command === "catalog_search") return { loading: false, error: null, entries: [{ name: "Firefox", target: String.raw`C:\Apps\firefox.exe`, args: "" }] };
+      if (command === "list_folders") {
+        if (failFolders) throw "Доступ заборонено.";
+        return [
+          { group: "quick", name: "Проєкти", path: String.raw`D:\Projects`, icon: "folder" },
+          { group: "known", name: "Робочий стіл", path: String.raw`C:\Users\me\Desktop`, icon: "desktop" },
+          { group: "known", name: "Завантаження", path: String.raw`C:\Users\me\Downloads`, icon: "import" },
+          { group: "drive", name: "Локальний диск (C:)", path: "C:\\", icon: "drive" },
+        ];
+      }
+      if (command === "list_scripts") return { pythonAvailable: false, scripts: [
+        { name: "backup", path: String.raw`C:\Users\me\Desktop\backup.ps1`, extension: "ps1", folder: "Desktop" },
+        { name: "rename", path: String.raw`C:\Users\me\Documents\rename.py`, extension: "py", folder: "Documents" },
+      ] };
       if (command === "check_update") native.update = { ...native.update, phase: "available", availableVersion: "2.0" };
       if (command === "download_update") native.update = { ...native.update, phase: "ready" };
       return null;
@@ -117,6 +130,8 @@ async function change(selector: string, value: string, eventName = "change") {
     input.dispatchEvent(new Event(eventName, { bubbles: true })); await idle();
   });
 }
+// Paths are Windows paths, so their backslashes are escaped for the attribute selector.
+const tile = (kind: string, path: string) => `[data-${kind}="${path.replaceAll("\\", "\\\\")}"]`;
 async function submitDialog() {
   await act(async () => { element("#editor-dialog form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await idle(); });
 }
@@ -223,6 +238,56 @@ describe("React editor shell and native events", () => {
     await change("#action-name", "Блокнот Windows", "input");
     await act(async () => { element("#action-dialog form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await idle(); });
     expect(menu().items.find((item) => item.id === added.id)!.name).toBe("Блокнот Windows");
+  });
+
+  it("picks folders and scripts from tiles, by keyboard, and keeps manual paths", async () => {
+    const env = setup(); await mount();
+    const menu = () => env.native().settings.menus.find((entry) => entry.id === env.native().settings.activeMenuId)!;
+    await click('[data-action="add-action"]');
+    await click('[data-kind="folder"]');
+    expect(element('[data-kind="folder"]').getAttribute("tabindex")).toBe("0");
+    expect(element('[data-kind="app"]').getAttribute("tabindex")).toBe("-1");
+    expect(element("#folder-tiles").textContent).toContain("Швидкий доступ");
+    expect(element("#folder-tiles").textContent).toContain("Диски");
+    await click(tile("folder", String.raw`C:\Users\me\Desktop`));
+    expect((element("#action-target") as HTMLInputElement).value).toBe(String.raw`C:\Users\me\Desktop`);
+    expect((element("#action-name") as HTMLInputElement).value).toBe("Робочий стіл");
+    expect(element(tile("folder", String.raw`C:\Users\me\Desktop`)).getAttribute("aria-current")).toBe("true");
+    // A later pick replaces the suggested name; the arrows walk the tiles and Enter/click picks.
+    element<HTMLElement>(tile("folder", String.raw`C:\Users\me\Desktop`)).focus();
+    await key(tile("folder", String.raw`C:\Users\me\Desktop`), "ArrowRight");
+    expect(document.activeElement?.getAttribute("data-folder")).toBe(String.raw`C:\Users\me\Downloads`);
+    await key(tile("folder", String.raw`C:\Users\me\Downloads`), "Home");
+    expect(document.activeElement?.getAttribute("data-folder")).toBe(String.raw`D:\Projects`);
+    await click(tile("folder", String.raw`D:\Projects`));
+    expect((element("#action-name") as HTMLInputElement).value).toBe("Проєкти");
+    // Typed names stay; typed paths still work.
+    await change("#action-name", "Мої проєкти", "input");
+    await click(tile("folder", String.raw`C:\Users\me\Downloads`));
+    expect((element("#action-name") as HTMLInputElement).value).toBe("Мої проєкти");
+    await change("#action-target", String.raw`E:\Archive`, "input");
+    expect(document.querySelector('[data-folder][aria-current="true"]')).toBeNull();
+    await act(async () => { element("#action-dialog form").dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); await idle(); });
+    expect([menu().items.at(-1)!.kind, menu().items.at(-1)!.target, menu().items.at(-1)!.name]).toEqual(["folder", String.raw`E:\Archive`, "Мої проєкти"]);
+
+    await click('[data-action="add-action"]');
+    await click('[data-kind="script"]');
+    expect(element("#script-tiles").textContent).toContain(".ps1 · Desktop");
+    await click(tile("script", String.raw`C:\Users\me\Documents\rename.py`));
+    expect((element("#action-name") as HTMLInputElement).value).toBe("rename");
+    expect(element("#python-missing").textContent).toContain("Python не знайдено");
+    await key('[data-kind="script"]', "ArrowLeft");
+    expect(document.activeElement?.getAttribute("data-kind")).toBe("folder");
+    expect(element('[data-kind="folder"]').getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("falls back to manual entry when the folder list cannot be read", async () => {
+    setup({ failFolders: true }); await mount();
+    await click('[data-action="add-action"]');
+    await click('[data-kind="folder"]');
+    expect(element('#folder-tiles [role="alert"]').textContent).toContain("Доступ заборонено.");
+    await change("#action-target", String.raw`D:\Work`, "input");
+    expect((element("#action-target") as HTMLInputElement).value).toBe(String.raw`D:\Work`);
   });
 
   it("recovers from a failed state read using retry without duplicating subscriptions", async () => {
