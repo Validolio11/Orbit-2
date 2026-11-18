@@ -153,7 +153,7 @@ export function renderWheel(svg, imageLayer, view, onIconReady = () => {}) {
         glyph(group, "plus", x - 4.5 * scale, y - 4.5 * scale, 9 * scale, "pip-glyph");
       }
     }
-    if (!isAdd && index < SHORTCUT_KEYS.length) { const [kx, ky] = at([Math.cos(angle) * keyRadius, Math.sin(angle) * keyRadius], pop); group.append(svgNode("text", { x: kx, y: ky, "dominant-baseline": "middle", "font-size": 11, class: "shortcut" }, SHORTCUT_KEYS[index])); }
+    if (!isAdd && index < SHORTCUT_KEYS.length) { const [kx, ky] = at([Math.cos(angle) * keyRadius, Math.sin(angle) * keyRadius], pop); group.setAttribute("aria-keyshortcuts", SHORTCUT_KEYS[index]); group.append(svgNode("text", { x: kx, y: ky, "dominant-baseline": "middle", "font-size": 11, class: "shortcut", "aria-hidden": "true" }, SHORTCUT_KEYS[index])); }
     if (item?.kind === "group") {
       const x = iconX + exactSize + 2 * scale, y = iconY - scale, radius = 7.5 * Math.max(.8, scale);
       group.append(svgNode("circle", { cx: x, cy: y, r: radius, class: "group-pip" }));
@@ -168,7 +168,7 @@ export function renderWheel(svg, imageLayer, view, onIconReady = () => {}) {
     }
     scene.append(group);
   }
-  const hub = svgNode("g", { class: "hub", "data-back": back, role: back ? "menuitem" : "presentation", tabindex: back ? 0 : -1, "aria-label": back ? "Назад" : "Orbit" });
+  const hub = svgNode("g", { class: "hub", "data-back": back, ...(back ? { role: "menuitem", tabindex: 0, "aria-label": "Назад" } : { role: "presentation" }) });
   hub.append(polygon(hubPolygon([0, 0], 74.4 * 1.04, ROUND).map((p) => at(p)), "hub-surface"));
   const hubIconSize = (back ? 24 : 30) * Math.min(1.3, Math.max(.6, scale));
   const hubIcon = at([0, -18]);
@@ -184,7 +184,7 @@ export function renderWheel(svg, imageLayer, view, onIconReady = () => {}) {
   }
   scene.append(hub);
   if (!items.length) {
-    const empty = svgNode("g", { class: "empty-add", role: view.wheelAddSlot ? "menuitem" : "presentation", tabindex: view.wheelAddSlot ? 0 : -1, "aria-label": "Додайте першу дію" });
+    const empty = svgNode("g", { class: "empty-add", ...(view.wheelAddSlot ? { role: "menuitem", tabindex: 0, "aria-label": "Додайте першу дію" } : { role: "presentation" }) });
     // This lower-wheel target is deliberately separate from the hub, as in the overlay.
     empty.append(svgNode("rect", { x: center[0] - size / 2, y: center[1] + size * .22, width: size, height: size * .28, fill: "transparent" }));
     empty.append(svgNode("text", { x: center[0], y: center[1] + size * .3, "font-size": 12, class: "empty-label" }, "Додайте першу дію"));
