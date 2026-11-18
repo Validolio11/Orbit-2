@@ -39,12 +39,12 @@ export function Select<T extends string | number>({ id, value, options, onChange
     <SelectContent>{options.map(([key, label]) => <SelectItem key={key} value={String(key)}>{label}</SelectItem>)}</SelectContent>
   </UiSelect>;
 }
-export function Segmented<T extends string>({ label, value, options, onChange, prefix = '', compact = false }: { label: string; value: T; options: readonly { value: T; label: string; glyph?: string }[]; onChange: (value: T) => void; prefix?: string; compact?: boolean }) {
+export function Segmented<T extends string>({ label, value, options, onChange, prefix = '' }: { label: string; value: T; options: readonly { value: T; label: string; glyph?: string }[]; onChange: (value: T) => void; prefix?: string }) {
   return <ToggleGroup type="single" aria-label={label} value={value} onValueChange={(next) => { if (next) onChange(next as T); }}>{options.map((option) =>
-    <ToggleGroupItem key={option.value} value={option.value} className={cn('flex-1', compact && 'px-3')} data-focus={`${prefix}-${option.value}`} data-theme={option.value} aria-label={option.label} title={option.label}>{option.glyph && <Icon name={option.glyph} />}<span className={compact ? 'hidden' : undefined}>{option.label}</span></ToggleGroupItem>)}</ToggleGroup>;
+    <ToggleGroupItem key={option.value} value={option.value} className="flex-1" data-focus={`${prefix}-${option.value}`} data-theme={option.value} aria-label={option.label} title={option.label}>{option.glyph && <Icon name={option.glyph} />}<span>{option.label}</span></ToggleGroupItem>)}</ToggleGroup>;
 }
-export function ThemeControl({ theme, prefix = 'theme', compact = false, onChange }: { theme: Settings['theme']; prefix?: string; compact?: boolean; onChange: (theme: Settings['theme']) => void }) {
-  return <Segmented label="Тема" value={theme} prefix={prefix} compact={compact} onChange={onChange} options={[{ value: 'light', label: 'Світла', glyph: 'sun' }, { value: 'dark', label: 'Темна', glyph: 'moon' }, { value: 'system', label: 'Системна', glyph: 'system' }]} />;
+export function ThemeControl({ theme, prefix = 'theme', onChange }: { theme: Settings['theme']; prefix?: string; onChange: (theme: Settings['theme']) => void }) {
+  return <Segmented label="Тема" value={theme} prefix={prefix} onChange={onChange} options={[{ value: 'light', label: 'Світла', glyph: 'sun' }, { value: 'dark', label: 'Темна', glyph: 'moon' }, { value: 'system', label: 'Системна', glyph: 'system' }]} />;
 }
 export function Slider({ id, label, value, onChange }: { id: string; label: string; value: number; onChange: (value: number) => void }) {
   const [draft, setDraft] = useState(value);

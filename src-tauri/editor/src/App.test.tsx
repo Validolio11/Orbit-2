@@ -162,6 +162,8 @@ describe("React editor shell and native events", () => {
     expect(env.native().settings.enabled).toBe(false);
     expect(element("#status-card").textContent).toContain("Призупинено");
     await click('#navigation [data-page="settings"]');
+    // Theme lives in one place: the Settings page, not a second switch in the sidebar.
+    expect(document.querySelectorAll('[data-theme="light"]')).toHaveLength(1);
     await click('#workspace [data-theme="light"]');
     expect(env.native().settings.theme).toBe("light");
     expect(document.documentElement.dataset.theme).toBe("light");

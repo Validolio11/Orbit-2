@@ -4,7 +4,7 @@ import { activeMenu, addAction, flattenActions, moveAction, moveOut, removeActio
 import { useAppState } from './useAppState';
 import type { AppEvent, Page, Settings } from './types';
 import type { PageProps } from './components/types';
-import { Button, ThemeControl } from './components/Facet';
+import { Button } from './components/Facet';
 import { TitleBar } from './components/TitleBar';
 import { NavCapsule } from './components/NavCapsule';
 import { StatusCard } from './components/StatusCard';
@@ -110,7 +110,7 @@ export default function App() {
   return <>
     <TitleBar onCommand={(action) => { void run(() => windowCommand(action)); }} />
     <div className="grid h-[calc(100%-48px)] grid-cols-[12rem_minmax(0,1fr)] max-[1150px]:grid-cols-[11rem_minmax(0,1fr)]"><aside className="flex flex-col gap-6 pt-6 pr-3 pb-4 pl-4 max-[1150px]:pl-3"><NavCapsule page={page} onPage={onPage} />
-      <div className="mt-auto grid gap-4"><StatusCard state={snapshot} /><div id="shell-theme">{snapshot && <ThemeControl compact theme={snapshot.settings.theme} prefix="shell-theme" onChange={(theme) => patch({ theme })} />}</div></div>
+      <div className="mt-auto"><StatusCard state={snapshot} /></div>
     </aside><main ref={workspace} id="workspace" className="min-w-0 overflow-y-auto px-8 pt-8 pb-7 outline-none max-[1150px]:px-6 max-[1150px]:pt-7 [scrollbar-color:var(--input)_transparent]" tabIndex={-1} aria-labelledby="page-title">
       {error ? <div className="pt-9"><h1 id="page-title" className="text-3xl font-semibold tracking-tight">Не вдалося завантажити Orbit</h1><p className="my-3 text-destructive">{error}</p><Button data-action="retry" onClick={() => { void retry(); }}>Спробувати ще раз</Button></div>
         : props ? <Content {...props} /> : <div className="pt-9"><h1 id="page-title" className="text-3xl font-semibold tracking-tight">Завантаження Orbit…</h1><p className="my-3 text-muted-foreground">Читаємо збережені меню та налаштування.</p></div>}
