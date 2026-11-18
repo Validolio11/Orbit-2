@@ -109,6 +109,37 @@ Chose not to:
 Lesson: when a fixed-height tile centres its content, any wrapping label moves the icon; reserve the label's
 maximum height instead of centring variable content.
 
+## Block 5 — 2026-11-18: one theme control, neutral count, spacing, accessibility
+
+Owner instruction this block: work alone until 2026-11-19 and make every decision without asking. Applied: the
+open question from Block 4 (sidebar theme switch) is decided here, not left to the owner.
+
+Changed
+- Decided: removed the sidebar theme switch. Theme lives only in Settings (one place per setting, as in Block 2).
+  `ThemeControl`/`Segmented` lost the unused compact mode. Reversible in one line; settings untouched.
+- The "N дій" count on the menus page is neutral text: brand orange is reserved for the current choice.
+- Folder/script path field moved out of the picker section, so every form field in the action dialog is 20 px apart
+  (it sat 12 px under the tiles).
+- axe-core audit (outside the repo, in the screenshot harness) of every page and dialog in both themes:
+  dialogs had no accessible name (custom `DialogTitle` ids broke Radix's `aria-labelledby`); menu tabs pointed
+  `aria-controls` at panels that never rendered (now one official `TabsContent`, inactive tabs drop the attribute;
+  `Tabs`/`TabsContent` copied from new-york-v4); our own `text-muted-foreground/70` dimming failed contrast (back to
+  the token). Wheel overlay: shortcut digits `aria-hidden` + `aria-keyshortcuts` on the sector; the non-interactive
+  hub and empty target no longer carry a label or tab stop.
+
+Verified: tsc; vitest 39 (new: one theme control; dialogs named and tabs referencing existing panels); node 21;
+cargo test 24 (no Rust change this block); axe re-run — editor clean except shadcn's own light-theme pairs; wheel clean
+except an empty menu (0 actions, add slot off) and an axe SVG-text quirk on some sector names; screenshots both themes.
+
+Chose not to:
+- Change tokens for the 4.2–4.34:1 light pairs (`muted-foreground` on `secondary`/`muted`: kbd, selected row,
+  segmented control). They are shadcn's official values and CLAUDE.md forbids custom colours.
+- Rebuild the empty wheel (0 actions) as a one-sector ring with the add slot: it changes the JS/Rust hit-test
+  contract and fixture, the state is rare, and only Windows can confirm it. The floating "Додайте першу дію" label stays.
+- Remove the empty-state caption under the editor's wheel preview: it is the wheel renderer's own empty state.
+
+Lesson: an automated audit (axe) finds structural problems screenshots never show; run it with every visual pass.
+
 ## Final summary — 2026-11-18
 
 Branch `orbit2/autonomous-improve`, all gates green at the last push: `npx tsc --noEmit`, `npx vitest run` (38),
@@ -142,6 +173,6 @@ Needs a human on Windows (cannot be checked from the cloud)
 Recommended next
 1. Owner: run the branch build on Windows, rate icons, wheel and app separately, and note anything that looks wide,
    touching or noisy.
-2. Decide whether the sidebar theme switch should stay now that Settings has the same control.
+2. (Decided in Block 5: the sidebar theme switch was removed; Settings → Тема is the single place.)
 3. If the picker tiles feel top-heavy with one-line labels, try a slightly shorter tile; keep the two-line reservation.
 4. Only after that: "Клавіші" and "Текст" kinds, with optional fields and an old-settings fixture test.
